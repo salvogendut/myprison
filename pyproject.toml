@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myprison"
+version = "0.1.0"
+description = "Curses-based static blog manager producing Hugo-compatible sites"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+[project.scripts]
+myprison = "myprison.__main__:main"
+
+[tool.setuptools]
+packages = ["myprison"]

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+
+# per-site tool config — may contain an FTP password
+.myprison.json
+
+# Hugo build output
+public/
+resources/_gen/
+.hugo_build.lock
