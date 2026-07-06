@@ -18,8 +18,9 @@ toolchain — just Markdown files you own, managed from a keyboard.
 │    New post                                              │
 │    Build site (hugo)                                     │
 │    Preview site (hugo server)                            │
-│    Deploy to web server                                  │
-│    Deployment settings (SSH/FTP)                         │
+│    Deploy (rsync / FTP / GitHub Pages)                   │
+│    Deployment settings                                   │
+│    GitHub Pages via Actions (CI setup)                   │
 │    Site settings (title, URL)                            │
 │    Themes                                                │
 │    Edit Hugo config file                                 │
@@ -45,6 +46,10 @@ toolchain — just Markdown files you own, managed from a keyboard.
 - **Publish from the same menu.** Sync the built site to your server with
   rsync over SSH (incremental, recommended) or FTP/FTPS — credentials and
   options configured in-app.
+- **GitHub Pages support.** Publish the built site to a GitHub Pages
+  repository (a local checkout or a remote URL), or generate the official
+  GitHub Actions workflow so GitHub builds and deploys the site itself on
+  every push — no local Hugo needed.
 
 ## Quick start
 
@@ -63,6 +68,13 @@ themes.gohugo.io), write your first post, build, and deploy.
 |----------|----------|
 | [INSTALL.md](INSTALL.md) | Requirements, installation methods, installing Hugo |
 | [USAGE.md](USAGE.md) | Full guide: menus, the editor, posts, themes, deployment |
+
+## The name
+
+*myprison* is a nod to **“Le mie prigioni”** (*My Prisons*, 1832) by Silvio
+Pellico — the memoir of his years as a political prisoner of the Austrian
+Empire, written plainly, one day at a time. A fitting patron for a blog you
+write plainly, one post at a time, from a terminal cell.
 
 ## License
 

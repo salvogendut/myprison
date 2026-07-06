@@ -16,6 +16,65 @@ draft: true
 ---
 """
 
+# Based on the official Hugo "Host on GitHub Pages" starter workflow.
+GITHUB_WORKFLOW = """\
+name: Deploy Hugo site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      HUGO_VERSION: 0.162.1
+    steps:
+      - name: Install Hugo CLI
+        run: |
+          wget -O ${{ runner.temp }}/hugo.deb \\
+            https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb
+          sudo dpkg -i ${{ runner.temp }}/hugo.deb
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Build with Hugo
+        run: hugo --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+"""
+
 
 def _toml_quote(value: str) -> str:
     if "'" not in value:
@@ -133,6 +192,22 @@ class Site:
         dest = self.themes_dir / name
         if dest.is_dir():
             shutil.rmtree(dest)
+
+    # -- GitHub Pages CI -----------------------------------------------------------
+
+    def write_github_workflow(self) -> Path:
+        """Write the Hugo GitHub Pages Actions workflow; returns its path."""
+        path = self.root / ".github" / "workflows" / "hugo.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(GITHUB_WORKFLOW, encoding="utf-8")
+        return path
+
+    def vendored_theme_gits(self) -> list[str]:
+        """Themes that carry their own .git (invisible to a plain git push)."""
+        return [
+            name for name in self.list_themes()
+            if (self.themes_dir / name / ".git").exists()
+        ]
 
     # -- build -------------------------------------------------------------------
 

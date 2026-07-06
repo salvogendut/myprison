@@ -110,13 +110,16 @@ Both require the `hugo` binary ([INSTALL.md](INSTALL.md#installing-hugo)).
 
 | Field | Meaning |
 |-------|---------|
-| Method | `rsync` (over SSH, recommended), `ftp`, or `ftps` (FTP with TLS) |
-| Host | server hostname or IP |
+| Method | `rsync` (over SSH, recommended), `ftp`, `ftps` (FTP with TLS), or `github` (GitHub Pages) |
+| Host | server hostname or IP (rsync/ftp) |
 | Port | `0` = default (SSH 22 / FTP 21) |
-| User | remote username |
+| User | remote username (rsync/ftp) |
 | Remote path | directory served by your web server, e.g. `/var/www/blog` |
 | SSH key file | optional identity file for rsync (else your ssh-agent/default keys) |
 | FTP password | optional; leave empty to be prompted at each deploy |
+| GH Pages repo | `github` method: local repo path (e.g. `~/Dev/mypages`) or remote git URL |
+| GH branch | `github` method with a remote URL: branch to force-push (default `gh-pages`) |
+| GH custom domain | optional; written as a `CNAME` file into the published site |
 | rsync --delete | remove remote files that no longer exist locally |
 | Build before deploy | run `hugo` automatically first |
 | Include drafts | pass `--buildDrafts` to that build |
@@ -143,7 +146,53 @@ leave the password empty and type it when deploying.
 The sync runs outside the curses UI so you see the full rsync/FTP output,
 then returns to the menu on Enter.
 
-## 6. Interoperating with plain Hugo
+## 6. Publishing on GitHub Pages
+
+There are two independent routes; pick one.
+
+### Route A — push the built site with git (method `github`)
+
+`myprison` builds locally and publishes `public/` to a GitHub repository
+that serves GitHub Pages. Set **Method** to `github` in the deployment
+settings and fill **GH Pages repo** with either:
+
+- **a local clone** (e.g. `~/Dev/mypages`): the built site replaces the
+  repo's contents (housekeeping files like `README.md`, `LICENSE`,
+  `.gitignore`, `.github/` are kept), is committed on the current branch,
+  and pushed to `origin` with your normal git credentials. If nothing
+  changed since the last publish, nothing is pushed.
+- **a remote URL** (e.g. `git@github.com:you/blog-pages.git`): the built
+  site is force-pushed to the **GH branch** (default `gh-pages`) from a
+  throwaway repository.
+
+A `.nojekyll` file is always included (so Hugo output isn't mangled by
+Jekyll), plus a `CNAME` file if you set a custom domain.
+
+Then, once, on GitHub: **repo Settings → Pages → Source: “Deploy from a
+branch”**, and select the branch you publish to (with `/ (root)`).
+
+Mind the `baseURL` in your site settings — for a project repository it is
+`https://<user>.github.io/<repo>/`; for a `<user>.github.io` repository it
+is `https://<user>.github.io/`.
+
+### Route B — let GitHub build it (Actions workflow)
+
+**GitHub Pages via Actions (CI setup)** writes
+`.github/workflows/hugo.yml` (the official Hugo starter workflow) into the
+*site source* directory. Version the site with git, push it to GitHub, and
+set **repo Settings → Pages → Source: “GitHub Actions”**. From then on
+every push to `main` builds and deploys the site on GitHub's runners — you
+don't need Hugo installed at all, and `baseURL` is set automatically by the
+workflow.
+
+Caveat: themes installed by `myprison` are git clones and contain their own
+`.git`, so a plain `git push` of the site would *not* include them. Either
+register the theme as a proper submodule
+(`git submodule add <theme-url> themes/<name>` — the workflow checks out
+submodules), or delete `themes/<name>/.git` to commit the theme as plain
+files. `myprison` warns about affected themes when it writes the workflow.
+
+## 7. Interoperating with plain Hugo
 
 The site is a normal Hugo site at all times. You can freely mix tools:
 

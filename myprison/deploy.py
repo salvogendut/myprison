@@ -1,14 +1,18 @@
 """Deployment of the built site (public/) to a remote web server.
 
-Two transports:
+Three transports:
   - rsync over SSH (recommended): incremental, optional --delete
   - FTP / FTPS via ftplib: full upload walk, remote dirs created as needed
+  - GitHub Pages: force-push public/ to a branch (default gh-pages)
 """
 
 from __future__ import annotations
 
 import ftplib
 import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -29,6 +33,91 @@ def rsync_argv(deploy: dict, local_dir: Path) -> list[str]:
         remote = "%s:%s" % (deploy["host"], deploy["remote_path"])
     argv += [str(local_dir) + "/", remote]
     return argv
+
+
+# -- GitHub Pages ------------------------------------------------------------
+
+# kept when cleaning a local Pages repo: repo housekeeping, not site output
+_PAGES_KEEP = {".git", ".github", ".gitignore", "README.md", "LICENSE"}
+
+
+def _write_pages_extras(dest: Path, deploy: dict) -> None:
+    (dest / ".nojekyll").touch()
+    cname = deploy.get("gh_cname", "").strip()
+    if cname:
+        (dest / "CNAME").write_text(cname + "\n", encoding="utf-8")
+
+
+def _git(repo: Path, *args: str, log=print) -> subprocess.CompletedProcess:
+    argv = ["git", "-C", str(repo), *args]
+    log("$ %s" % " ".join(argv))
+    return subprocess.run(argv, check=True)
+
+
+def github_pages_publish(deploy: dict, local_dir: Path, log=print) -> None:
+    """Publish local_dir (the built site) to GitHub Pages.
+
+    deploy['gh_repo'] may be:
+      - a local git repository path (e.g. ~/Dev/chimeric): the built site is
+        copied in, committed on the current branch, and pushed to origin;
+      - a remote URL: the site is force-pushed to branch deploy['gh_branch']
+        (default gh-pages) from a temporary repository.
+    """
+    target = deploy.get("gh_repo", "").strip()
+    if not target:
+        raise ValueError("GitHub Pages repository is not set (deployment settings)")
+    local_candidate = Path(target).expanduser()
+    if (local_candidate / ".git").exists():
+        _publish_to_local_repo(deploy, Path(local_dir), local_candidate, log)
+    else:
+        _publish_to_remote(deploy, Path(local_dir), target, log)
+
+
+def _publish_to_local_repo(deploy: dict, site_dir: Path, repo: Path, log=print) -> None:
+    repo = repo.resolve()
+    log("Publishing into local repository %s" % repo)
+    kept = []
+    for entry in repo.iterdir():
+        if entry.name in _PAGES_KEEP:
+            kept.append(entry.name)
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    if kept:
+        log("(kept: %s)" % ", ".join(sorted(kept)))
+    shutil.copytree(site_dir, repo, dirs_exist_ok=True)
+    _write_pages_extras(repo, deploy)
+    _git(repo, "add", "-A", log=log)
+    staged = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--quiet"]
+    )
+    if staged.returncode == 0:
+        log("No changes since the last publish — nothing to push.")
+        return
+    _git(repo, "commit", "-m", "Publish site (myprison)", log=log)
+    _git(repo, "push", "origin", "HEAD", log=log)
+    log("\nPublished: pushed current branch of %s to origin." % repo.name)
+
+
+def _publish_to_remote(deploy: dict, site_dir: Path, url: str, log=print) -> None:
+    branch = (deploy.get("gh_branch") or "gh-pages").strip()
+    tmp = Path(tempfile.mkdtemp(prefix="myprison-pages-"))
+    try:
+        shutil.copytree(site_dir, tmp, dirs_exist_ok=True)
+        _write_pages_extras(tmp, deploy)
+        _git(tmp, "init", "-q", "-b", branch, log=log)
+        _git(tmp, "add", "-A", log=log)
+        _git(tmp, "-c", "user.name=myprison", "-c", "user.email=myprison@localhost",
+             "commit", "-q", "-m", "Publish site (myprison)", log=log)
+        _git(tmp, "push", "--force", url, "HEAD:refs/heads/%s" % branch, log=log)
+        log("\nPublished: force-pushed to %s branch %s." % (url, branch))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# -- FTP ---------------------------------------------------------------------
 
 
 def _ftp_mkdirs(ftp: ftplib.FTP, remote_dir: str) -> None:

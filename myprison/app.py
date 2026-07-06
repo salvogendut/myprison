@@ -245,16 +245,22 @@ class App:
         d = self.cfg.deploy
         fields = [
             {"key": "method", "label": "Method", "type": "choice",
-             "value": d["method"], "choices": ["rsync", "ftp", "ftps"]},
-            {"key": "host", "label": "Host", "type": "str", "value": d["host"]},
+             "value": d["method"], "choices": ["rsync", "ftp", "ftps", "github"]},
+            {"key": "host", "label": "Host (rsync/ftp)", "type": "str", "value": d["host"]},
             {"key": "port", "label": "Port (0 = default)", "type": "int", "value": d["port"]},
-            {"key": "user", "label": "User", "type": "str", "value": d["user"]},
+            {"key": "user", "label": "User (rsync/ftp)", "type": "str", "value": d["user"]},
             {"key": "remote_path", "label": "Remote path", "type": "str",
              "value": d["remote_path"]},
             {"key": "ssh_key", "label": "SSH key file (rsync)", "type": "str",
              "value": d["ssh_key"]},
             {"key": "ftp_password", "label": "FTP password (stored!)", "type": "password",
              "value": d["ftp_password"]},
+            {"key": "gh_repo", "label": "GH Pages repo (path/URL)", "type": "str",
+             "value": d["gh_repo"]},
+            {"key": "gh_branch", "label": "GH branch (URL mode)", "type": "str",
+             "value": d["gh_branch"]},
+            {"key": "gh_cname", "label": "GH custom domain", "type": "str",
+             "value": d["gh_cname"]},
             {"key": "delete_remote", "label": "rsync --delete", "type": "bool",
              "value": d["delete_remote"]},
             {"key": "build_first", "label": "Build before deploy", "type": "bool",
@@ -279,7 +285,13 @@ class App:
 
     def do_deploy(self) -> None:
         d = self.cfg.deploy
-        if not d["host"]:
+        if d["method"] == "github":
+            if not d["gh_repo"]:
+                ui.message(self.stdscr, "Not configured",
+                           "Set the GitHub Pages repo (path or URL)\n"
+                           "in 'Deployment settings' first.")
+                return
+        elif not d["host"]:
             ui.message(self.stdscr, "Not configured",
                        "Set the host in 'Deployment settings' first.")
             return
@@ -299,7 +311,13 @@ class App:
                        "public/ is empty. Build the site first (needs hugo).")
             return
 
-        if d["method"] == "rsync":
+        if d["method"] == "github":
+
+            def gh_publish():
+                deploy.github_pages_publish(d, pub)
+
+            run_external(self.stdscr, gh_publish)
+        elif d["method"] == "rsync":
             argv = deploy.rsync_argv(d, pub)
 
             def sync():
@@ -324,6 +342,33 @@ class App:
 
             run_external(self.stdscr, ftp_sync)
 
+    def github_actions_setup(self) -> None:
+        if not ui.confirm(
+            self.stdscr,
+            "Write .github/workflows/hugo.yml into the site?",
+            "GitHub Pages (Actions)",
+        ):
+            return
+        path = self.site.write_github_workflow()
+        lines = [
+            "Wrote %s" % path.relative_to(self.site.root),
+            "",
+            "GitHub now builds the site itself on every push:",
+            "1. Make the site a git repo and push it to GitHub.",
+            "2. Repo Settings -> Pages -> Source: 'GitHub Actions'.",
+            "3. Push to main; the site appears at your Pages URL.",
+        ]
+        nested = self.site.vendored_theme_gits()
+        if nested:
+            lines += [
+                "",
+                "Note: these themes contain their own .git and would NOT",
+                "be pushed with the site: %s." % ", ".join(nested),
+                "Either add them as git submodules, or delete the .git",
+                "directory inside the theme to commit it as plain files.",
+            ]
+        ui.message(self.stdscr, "GitHub Actions workflow created", "\n".join(lines))
+
     # -- main menu -------------------------------------------------------------------------
 
     def run(self) -> None:
@@ -332,8 +377,9 @@ class App:
             ("New post", self.new_post),
             ("Build site (hugo)", self.build),
             ("Preview site (hugo server)", self.preview),
-            ("Deploy to web server", self.do_deploy),
-            ("Deployment settings (SSH/FTP)", self.deploy_settings),
+            ("Deploy (rsync / FTP / GitHub Pages)", self.do_deploy),
+            ("Deployment settings", self.deploy_settings),
+            ("GitHub Pages via Actions (CI setup)", self.github_actions_setup),
             ("Site settings (title, URL)", self.site_settings),
             ("Themes", self.themes_screen),
             ("Edit Hugo config file", self.edit_site_config),

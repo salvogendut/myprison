@@ -13,13 +13,16 @@ from pathlib import Path
 CONFIG_FILENAME = ".myprison.json"
 
 DEFAULT_DEPLOY = {
-    "method": "rsync",        # rsync | ftp | ftps
+    "method": "rsync",        # rsync | ftp | ftps | github
     "host": "",
     "port": 0,                 # 0 = default for the method (22 / 21)
     "user": "",
     "remote_path": "",
     "ssh_key": "",            # optional identity file for rsync/ssh
     "ftp_password": "",       # optional; prompted at deploy time if empty
+    "gh_repo": "",            # GitHub Pages: local repo path or remote git URL
+    "gh_branch": "gh-pages",  # branch for remote-URL publishing
+    "gh_cname": "",           # custom domain -> CNAME file
     "delete_remote": True,     # rsync --delete (rsync only)
     "build_first": True,       # run `hugo` before syncing
     "include_drafts": False,   # pass --buildDrafts to hugo
