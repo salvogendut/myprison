@@ -10,6 +10,8 @@
 | `git` | installing themes | themes are cloned from their git URLs |
 | `rsync` + `ssh` | rsync deployment | recommended deployment method |
 | — | FTP/FTPS deployment | pure Python (`ftplib`), nothing extra needed |
+| `git` | GitHub Pages deployment | publishing pushes the built site with git |
+| [`gh`](https://cli.github.com/) or a `GITHUB_TOKEN` | GitHub Pages extras | optional: lets myprison configure the repo's Pages source and watch private-repo Actions runs; public-repo status checks work without it |
 
 ## Option 1 — run from the repository (no installation)
 
@@ -66,6 +68,25 @@ edition is required by some themes (it is the default download).
 Without Hugo installed you can still create and edit posts, manage themes,
 and configure deployment — only **Build site** and **Preview site** need the
 binary.
+
+## Upgrading
+
+For a local directory install, pip always rebuilds and reinstalls, so
+upgrading is just:
+
+```bash
+cd myprison && git pull
+pip install --user .        # same flavor you installed with
+```
+
+Or install **editable** once and never reinstall again — the installed
+command then always runs the code currently in the repo:
+
+```bash
+pip install --user -e .
+```
+
+With pipx: `pipx reinstall myprison` (or `pipx install --force git+...`).
 
 ## First run
 

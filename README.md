@@ -12,7 +12,7 @@ toolchain — just Markdown files you own, managed from a keyboard.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ myprison 0.1.0 — /home/you/blog                          │
+│ myprison 0.4.0 — /home/you/blog                          │
 │                                                          │
 │  ❯ Posts — list / edit / delete                          │
 │    New post                                              │
@@ -48,9 +48,11 @@ toolchain — just Markdown files you own, managed from a keyboard.
   rsync over SSH (incremental, recommended) or FTP/FTPS — credentials and
   options configured in-app.
 - **GitHub Pages support.** Publish the built site to a GitHub Pages
-  repository (a local checkout or a remote URL), or generate the official
-  GitHub Actions workflow so GitHub builds and deploys the site itself on
-  every push — no local Hugo needed.
+  repository (a local checkout or a remote URL) and watch the GitHub
+  Actions run until the deployment is confirmed live. Setup actions
+  configure the repo's Pages source for you — either “Deploy from a
+  branch” via the GitHub API, or the official Actions workflow so GitHub
+  builds the site itself and no local Hugo is needed.
 
 ## Quick start
 

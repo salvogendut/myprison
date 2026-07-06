@@ -73,6 +73,34 @@ Write Markdown; Hugo renders it.
 | **Ctrl-K** | delete current line |
 | **Ctrl-X** | exit (asks to save if modified) |
 
+### Links and images
+
+Posts are plain Markdown, rendered by Hugo:
+
+```markdown
+Read [the Hugo docs](https://gohugo.io/documentation/) for details.
+See also [my first post]({{< relref "hello-world" >}}).
+
+![A sunset](/images/sunset.jpg)
+```
+
+- Put image files under the site's `static/` directory — it is copied
+  verbatim into the built site. `static/images/sunset.jpg` is served as
+  `/images/sunset.jpg`.
+- For links between your own posts prefer the `relref` shortcode over
+  hardcoded paths: it resolves the real URL and fails the *build* (not the
+  reader) if the target is renamed.
+- **If your site lives under a subpath** (typical for GitHub Pages project
+  sites, e.g. `https://user.github.io/repo/`), add this to `hugo.toml`:
+
+  ```toml
+  canonifyURLs = true
+  ```
+
+  Without it, root-relative references like `/images/sunset.jpg` resolve
+  against the *domain root* and 404; with it, Hugo rewrites them against
+  your `baseURL` so they always work.
+
 ### The posts list
 
 **Posts** shows every post, **newest first**, with date and a `DRAFT` flag.
@@ -132,7 +160,8 @@ leave the password empty and type it when deploying.
 
 ### Deploy
 
-**Deploy to web server** builds (if configured), then syncs `public/`:
+**Deploy (rsync / FTP / GitHub Pages)** builds (if configured), then syncs
+`public/`:
 
 - **rsync**: equivalent to
   `rsync -avz --delete -e "ssh -p PORT -i KEY" public/ user@host:/remote/path`.
@@ -180,8 +209,11 @@ with `GITHUB_TOKEN`/`GH_TOKEN` or, if neither is set, your `gh` CLI login
 `/ (root)`).
 
 Mind the `baseURL` in your site settings — for a project repository it is
-`https://<user>.github.io/<repo>/`; for a `<user>.github.io` repository it
-is `https://<user>.github.io/`.
+`https://<user>.github.io/<repo>/` (trailing slash included); for a
+`<user>.github.io` repository it is `https://<user>.github.io/`. A wrong
+or subpath-less `baseURL` is the classic symptom of a page that loads but
+arrives unstyled (all CSS 404s). Pair it with `canonifyURLs = true` (see
+*Links and images* above) so image and link paths inside posts follow it.
 
 After the push, if **GH watch Actions run** is enabled (default), `myprison`
 polls the GitHub API for the workflow run triggered by that exact commit —
@@ -190,12 +222,24 @@ or your `hugo.yml` run for Actions-source — and reports its conclusion, so
 you know the site is actually live before leaving the deploy screen.
 `Ctrl-C` stops watching (the deployment on GitHub continues regardless).
 Public repositories need no authentication; for private ones (or to avoid
-API rate limits) export `GITHUB_TOKEN` (or `GH_TOKEN`) before starting
-`myprison`.
+API rate limits) it uses `GITHUB_TOKEN`/`GH_TOKEN` or, failing that, your
+`gh` CLI login.
+
+**Keep source and output apart.** Publishing *replaces* the target's
+contents with the built site, so:
+
+- Never point **GH Pages repo** at the site source directory itself — in
+  local-repo mode the publish would wipe your `content/`, themes, and
+  config (only `.git`, `.github/`, `.gitignore`, `README.md`, `LICENSE`
+  survive).
+- If you publish to a remote URL whose repository also hosts your site
+  *source*, the published branch is force-pushed output — commit the
+  source somewhere safe (another branch you push normally, or a separate
+  repository). Your `content/` exists only on your disk otherwise.
 
 ### Route B — let GitHub build it (Actions workflow)
 
-**GitHub Pages via Actions (CI setup)** writes
+**GitHub Pages: build via Actions (setup)** writes
 `.github/workflows/hugo.yml` (the official Hugo starter workflow) into the
 *site source* directory. Version the site with git, push it to GitHub, and
 set **repo Settings → Pages → Source: “GitHub Actions”**. From then on
