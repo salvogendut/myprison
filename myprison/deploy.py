@@ -9,10 +9,15 @@ Three transports:
 from __future__ import annotations
 
 import ftplib
+import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -54,26 +59,46 @@ def _git(repo: Path, *args: str, log=print) -> subprocess.CompletedProcess:
     return subprocess.run(argv, check=True)
 
 
-def github_pages_publish(deploy: dict, local_dir: Path, log=print) -> None:
+def parse_github_repo(url: str) -> tuple[str, str] | None:
+    """Extract (owner, repo) from a github.com remote URL, else None."""
+    url = url.strip()
+    m = re.match(r"^(?:git@|ssh://git@)github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$", url)
+    if m is None:
+        m = re.match(r"^https?://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", url)
+    return (m.group(1), m.group(2)) if m else None
+
+
+def github_pages_publish(deploy: dict, local_dir: Path, log=print) -> dict | None:
     """Publish local_dir (the built site) to GitHub Pages.
 
     deploy['gh_repo'] may be:
-      - a local git repository path (e.g. ~/Dev/chimeric): the built site is
-        copied in, committed on the current branch, and pushed to origin;
+      - a local git repository path (e.g. a checkout of your Pages repo):
+        the built site is copied in, committed on the current branch, and
+        pushed to origin;
       - a remote URL: the site is force-pushed to branch deploy['gh_branch']
         (default gh-pages) from a temporary repository.
+
+    Returns {'owner', 'repo', 'sha'} for the pushed commit when the target is
+    on github.com, or None when nothing was pushed / the remote is elsewhere.
     """
     target = deploy.get("gh_repo", "").strip()
     if not target:
         raise ValueError("GitHub Pages repository is not set (deployment settings)")
     local_candidate = Path(target).expanduser()
     if (local_candidate / ".git").exists():
-        _publish_to_local_repo(deploy, Path(local_dir), local_candidate, log)
-    else:
-        _publish_to_remote(deploy, Path(local_dir), target, log)
+        return _publish_to_local_repo(deploy, Path(local_dir), local_candidate, log)
+    return _publish_to_remote(deploy, Path(local_dir), target, log)
 
 
-def _publish_to_local_repo(deploy: dict, site_dir: Path, repo: Path, log=print) -> None:
+def _pushed_info(repo_url: str, sha: str, log=print) -> dict | None:
+    parsed = parse_github_repo(repo_url)
+    if parsed is None:
+        log("(remote %s is not on github.com — skipping Actions check)" % repo_url)
+        return None
+    return {"owner": parsed[0], "repo": parsed[1], "sha": sha}
+
+
+def _publish_to_local_repo(deploy: dict, site_dir: Path, repo: Path, log=print) -> dict | None:
     repo = repo.resolve()
     log("Publishing into local repository %s" % repo)
     kept = []
@@ -95,13 +120,22 @@ def _publish_to_local_repo(deploy: dict, site_dir: Path, repo: Path, log=print) 
     )
     if staged.returncode == 0:
         log("No changes since the last publish — nothing to push.")
-        return
+        return None
     _git(repo, "commit", "-m", "Publish site (myprison)", log=log)
     _git(repo, "push", "origin", "HEAD", log=log)
     log("\nPublished: pushed current branch of %s to origin." % repo.name)
+    sha = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    remote = subprocess.run(
+        ["git", "-C", str(repo), "remote", "get-url", "origin"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return _pushed_info(remote, sha, log)
 
 
-def _publish_to_remote(deploy: dict, site_dir: Path, url: str, log=print) -> None:
+def _publish_to_remote(deploy: dict, site_dir: Path, url: str, log=print) -> dict | None:
     branch = (deploy.get("gh_branch") or "gh-pages").strip()
     tmp = Path(tempfile.mkdtemp(prefix="myprison-pages-"))
     try:
@@ -113,8 +147,76 @@ def _publish_to_remote(deploy: dict, site_dir: Path, url: str, log=print) -> Non
              "commit", "-q", "-m", "Publish site (myprison)", log=log)
         _git(tmp, "push", "--force", url, "HEAD:refs/heads/%s" % branch, log=log)
         log("\nPublished: force-pushed to %s branch %s." % (url, branch))
+        sha = subprocess.run(
+            ["git", "-C", str(tmp), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        return _pushed_info(url, sha, log)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# -- GitHub Actions status check ------------------------------------------------
+
+
+def _api_get(url: str) -> dict:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "myprison",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = "Bearer %s" % token
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.load(resp)
+
+
+def github_actions_wait(
+    owner: str, repo: str, sha: str,
+    log=print, timeout: float = 360, interval: float = 8,
+) -> bool:
+    """Poll GitHub Actions for workflow runs on *sha* until they complete.
+
+    Covers both the automatic 'pages build and deployment' run (branch-source
+    Pages) and custom workflows like hugo.yml (Actions-source Pages).
+    Returns True only if at least one run was found and all runs succeeded.
+    Set GITHUB_TOKEN/GH_TOKEN for private repositories or higher rate limits.
+    """
+    api = ("https://api.github.com/repos/%s/%s/actions/runs?head_sha=%s&per_page=20"
+           % (owner, repo, sha))
+    web = "https://github.com/%s/%s/actions" % (owner, repo)
+    log("Watching GitHub Actions for %s/%s @ %.10s ..." % (owner, repo, sha))
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            data = _api_get(api)
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            log("  (API error: %s — retrying)" % exc)
+            data = {}
+        runs = data.get("workflow_runs", [])
+        if runs:
+            pending = [r for r in runs if r.get("status") != "completed"]
+            if not pending:
+                ok = True
+                for r in runs:
+                    conclusion = r.get("conclusion") or "unknown"
+                    log("  %s: %s" % (r.get("name"), conclusion))
+                    if conclusion != "success":
+                        ok = False
+                        log("    details: %s" % r.get("html_url", web))
+                log("GitHub Actions: %s" % ("all runs succeeded — site deployed."
+                                            if ok else "FAILED — see details above."))
+                return ok
+            log("  in progress: %s"
+                % ", ".join("%s (%s)" % (r.get("name"), r.get("status")) for r in pending))
+        else:
+            log("  no workflow run for this commit yet — waiting...")
+        if time.monotonic() >= deadline:
+            log("Timed out after %ds waiting for GitHub Actions.\nCheck %s"
+                % (int(timeout), web))
+            return False
+        time.sleep(interval)
 
 
 # -- FTP ---------------------------------------------------------------------

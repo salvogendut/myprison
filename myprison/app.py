@@ -261,6 +261,8 @@ class App:
              "value": d["gh_branch"]},
             {"key": "gh_cname", "label": "GH custom domain", "type": "str",
              "value": d["gh_cname"]},
+            {"key": "gh_watch_actions", "label": "GH watch Actions run", "type": "bool",
+             "value": d["gh_watch_actions"]},
             {"key": "delete_remote", "label": "rsync --delete", "type": "bool",
              "value": d["delete_remote"]},
             {"key": "build_first", "label": "Build before deploy", "type": "bool",
@@ -314,7 +316,10 @@ class App:
         if d["method"] == "github":
 
             def gh_publish():
-                deploy.github_pages_publish(d, pub)
+                info = deploy.github_pages_publish(d, pub)
+                if info and d.get("gh_watch_actions", True):
+                    print("\n(Ctrl-C stops watching; the deployment itself continues)\n")
+                    deploy.github_actions_wait(info["owner"], info["repo"], info["sha"])
 
             run_external(self.stdscr, gh_publish)
         elif d["method"] == "rsync":

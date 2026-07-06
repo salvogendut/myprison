@@ -120,6 +120,7 @@ Both require the `hugo` binary ([INSTALL.md](INSTALL.md#installing-hugo)).
 | GH Pages repo | `github` method: local repo path (e.g. `~/Dev/mypages`) or remote git URL |
 | GH branch | `github` method with a remote URL: branch to force-push (default `gh-pages`) |
 | GH custom domain | optional; written as a `CNAME` file into the published site |
+| GH watch Actions run | after publishing, poll GitHub Actions and report whether the Pages deployment succeeded |
 | rsync --delete | remove remote files that no longer exist locally |
 | Build before deploy | run `hugo` automatically first |
 | Include drafts | pass `--buildDrafts` to that build |
@@ -174,6 +175,16 @@ branch”**, and select the branch you publish to (with `/ (root)`).
 Mind the `baseURL` in your site settings — for a project repository it is
 `https://<user>.github.io/<repo>/`; for a `<user>.github.io` repository it
 is `https://<user>.github.io/`.
+
+After the push, if **GH watch Actions run** is enabled (default), `myprison`
+polls the GitHub API for the workflow run triggered by that exact commit —
+the automatic *“pages build and deployment”* run for branch-source Pages,
+or your `hugo.yml` run for Actions-source — and reports its conclusion, so
+you know the site is actually live before leaving the deploy screen.
+`Ctrl-C` stops watching (the deployment on GitHub continues regardless).
+Public repositories need no authentication; for private ones (or to avoid
+API rate limits) export `GITHUB_TOKEN` (or `GH_TOKEN`) before starting
+`myprison`.
 
 ### Route B — let GitHub build it (Actions workflow)
 

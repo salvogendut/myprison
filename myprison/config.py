@@ -23,6 +23,7 @@ DEFAULT_DEPLOY = {
     "gh_repo": "",            # GitHub Pages: local repo path or remote git URL
     "gh_branch": "gh-pages",  # branch for remote-URL publishing
     "gh_cname": "",           # custom domain -> CNAME file
+    "gh_watch_actions": True,  # after publishing, wait for the Actions run
     "delete_remote": True,     # rsync --delete (rsync only)
     "build_first": True,       # run `hugo` before syncing
     "include_drafts": False,   # pass --buildDrafts to hugo
