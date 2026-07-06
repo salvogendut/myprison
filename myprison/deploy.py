@@ -159,17 +159,99 @@ def _publish_to_remote(deploy: dict, site_dir: Path, url: str, log=print) -> dic
 # -- GitHub Actions status check ------------------------------------------------
 
 
-def _api_get(url: str) -> dict:
+def _github_token() -> str | None:
+    """Token from the environment, or the gh CLI's stored login."""
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        return token
+    if shutil.which("gh"):
+        r = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    return None
+
+
+def _api_request(url: str, method: str = "GET", body: dict | None = None) -> tuple[int, dict]:
+    """One GitHub API call; returns (status, decoded json). HTTP errors are
+    returned as a status, not raised; network errors do raise."""
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "myprison",
     }
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    token = _github_token()
     if token:
         headers["Authorization"] = "Bearer %s" % token
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.load(resp)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read()
+            return resp.status, (json.loads(raw) if raw.strip() else {})
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            payload = json.loads(raw)
+        except ValueError:
+            payload = {"message": raw.decode("utf-8", errors="replace")[:200]}
+        return exc.code, payload
+
+
+def _api_get(url: str) -> dict:
+    status, data = _api_request(url)
+    if status >= 400:
+        raise urllib.error.URLError("HTTP %d: %s" % (status, data.get("message", "")))
+    return data
+
+
+def github_pages_set_branch_source(owner: str, repo: str, branch: str, log=print) -> str | None:
+    """Configure GitHub Pages of owner/repo as 'Deploy from a branch',
+    serving *branch* from / (root); enables Pages if needed.
+
+    Returns the Pages site URL on success, None on failure (with the manual
+    steps logged so the user can do it on github.com instead).
+    """
+    settings_url = "https://github.com/%s/%s/settings/pages" % (owner, repo)
+    if _github_token() is None:
+        log("No GitHub token found (set GITHUB_TOKEN/GH_TOKEN, or log in with 'gh auth login').")
+        log("Configure it manually instead:")
+        log("  %s" % settings_url)
+        log("  Source: 'Deploy from a branch' -> branch '%s', folder '/ (root)'" % branch)
+        return None
+    api = "https://api.github.com/repos/%s/%s/pages" % (owner, repo)
+    source = {"source": {"branch": branch, "path": "/"}}
+    status, data = _api_request(api)
+    if status == 200:
+        current = data.get("source") or {}
+        if (data.get("build_type") in (None, "legacy")
+                and current.get("branch") == branch
+                and current.get("path", "/") == "/"):
+            log("Pages already deploys from branch '%s' (root)." % branch)
+        else:
+            status, data = _api_request(api, "PUT", {"build_type": "legacy", **source})
+            if status not in (200, 204):
+                log("Could not update Pages settings (HTTP %d: %s)."
+                    % (status, data.get("message", "")))
+                log("Do it manually: %s" % settings_url)
+                return None
+            log("Pages source set to: deploy from branch '%s' (root)." % branch)
+    elif status == 404:
+        status, data = _api_request(api, "POST", {"build_type": "legacy", **source})
+        if status != 201:
+            log("Could not enable Pages (HTTP %d: %s)." % (status, data.get("message", "")))
+            log("Do it manually: %s" % settings_url)
+            return None
+        log("GitHub Pages enabled: deploy from branch '%s' (root)." % branch)
+    else:
+        log("Could not read Pages settings (HTTP %d: %s)." % (status, data.get("message", "")))
+        return None
+    status, data = _api_request(api)
+    url = data.get("html_url") if status == 200 else None
+    if url:
+        log("Site URL: %s" % url)
+    return url
 
 
 def github_actions_wait(

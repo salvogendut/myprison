@@ -347,6 +347,51 @@ class App:
 
             run_external(self.stdscr, ftp_sync)
 
+    def github_branch_pages_setup(self) -> None:
+        """Configure the GitHub repo's Pages source as 'Deploy from a branch'."""
+        d = self.cfg.deploy
+        target = d.get("gh_repo", "").strip()
+        if not target:
+            ui.message(self.stdscr, "Not configured",
+                       "Set the GitHub Pages repo (path or URL)\n"
+                       "in 'Deployment settings' first.")
+            return
+        local = Path(target).expanduser()
+        if (local / ".git").exists():
+            def git_out(*args):
+                r = subprocess.run(["git", "-C", str(local), *args],
+                                   capture_output=True, text=True)
+                return r.stdout.strip() if r.returncode == 0 else ""
+            remote = git_out("remote", "get-url", "origin")
+            branch = git_out("rev-parse", "--abbrev-ref", "HEAD") or "main"
+        else:
+            remote = target
+            branch = (d.get("gh_branch") or "gh-pages").strip()
+        parsed = deploy.parse_github_repo(remote)
+        if parsed is None:
+            ui.message(self.stdscr, "Not a GitHub repository",
+                       "The Pages repo's remote is not on github.com:\n%s" % (remote or "(none)"))
+            return
+        owner, repo = parsed
+        if not ui.confirm(
+            self.stdscr,
+            "Point Pages of %s/%s at branch '%s' (root)?" % (owner, repo, branch),
+            "Deploy from a branch",
+        ):
+            return
+        result: dict = {}
+
+        def configure():
+            result["url"] = deploy.github_pages_set_branch_source(owner, repo, branch)
+
+        run_external(self.stdscr, configure)
+        url = result.get("url")
+        if url:
+            base = url if url.endswith("/") else url + "/"
+            if ui.confirm(self.stdscr,
+                          "Set the site baseURL to %s ?" % base, "Base URL"):
+                self.site.set_config_value("baseURL", base)
+
     def github_actions_setup(self) -> None:
         if not ui.confirm(
             self.stdscr,
@@ -384,7 +429,8 @@ class App:
             ("Preview site (hugo server)", self.preview),
             ("Deploy (rsync / FTP / GitHub Pages)", self.do_deploy),
             ("Deployment settings", self.deploy_settings),
-            ("GitHub Pages via Actions (CI setup)", self.github_actions_setup),
+            ("GitHub Pages: deploy from a branch (setup)", self.github_branch_pages_setup),
+            ("GitHub Pages: build via Actions (setup)", self.github_actions_setup),
             ("Site settings (title, URL)", self.site_settings),
             ("Themes", self.themes_screen),
             ("Edit Hugo config file", self.edit_site_config),

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "myprison"
-version = "0.3.0"
+version = "0.4.0"
 description = "Curses-based static blog manager producing Hugo-compatible sites"
 readme = "README.md"
 requires-python = ">=3.9"

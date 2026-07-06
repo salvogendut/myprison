@@ -20,7 +20,8 @@ toolchain — just Markdown files you own, managed from a keyboard.
 │    Preview site (hugo server)                            │
 │    Deploy (rsync / FTP / GitHub Pages)                   │
 │    Deployment settings                                   │
-│    GitHub Pages via Actions (CI setup)                   │
+│    GitHub Pages: deploy from a branch (setup)            │
+│    GitHub Pages: build via Actions (setup)               │
 │    Site settings (title, URL)                            │
 │    Themes                                                │
 │    Edit Hugo config file                                 │

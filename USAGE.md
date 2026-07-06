@@ -169,8 +169,15 @@ settings and fill **GH Pages repo** with either:
 A `.nojekyll` file is always included (so Hugo output isn't mangled by
 Jekyll), plus a `CNAME` file if you set a custom domain.
 
-Then, once, on GitHub: **repo Settings → Pages → Source: “Deploy from a
-branch”**, and select the branch you publish to (with `/ (root)`).
+Then, once, the repo's Pages source must be set to **“Deploy from a
+branch”** pointing at the branch you publish to. `myprison` can do this for
+you: **GitHub Pages: deploy from a branch (setup)** enables Pages on the
+repo and points it at the right branch through the GitHub API, then offers
+to set your site's `baseURL` to the resulting Pages URL. It authenticates
+with `GITHUB_TOKEN`/`GH_TOKEN` or, if neither is set, your `gh` CLI login
+(`gh auth login`); with no credentials it prints the manual steps
+(**repo Settings → Pages → Source: “Deploy from a branch”**, branch,
+`/ (root)`).
 
 Mind the `baseURL` in your site settings — for a project repository it is
 `https://<user>.github.io/<repo>/`; for a `<user>.github.io` repository it
