@@ -1,83 +1,69 @@
 # myprison
 
-A static-files blogging platform for the Linux/Unix shell. `myprison` is a
-curses (text-mode) front end that manages a standard [Hugo](https://gohugo.io/)
-site tree: it creates and edits posts with a built-in text editor, keeps them
-ordered chronologically, installs themes from
-[themes.gohugo.io](https://themes.gohugo.io/), builds the site with `hugo`,
-and syncs the result to your web server over SSH (rsync) or FTP/FTPS.
+**Write your blog in the terminal. Publish it anywhere.**
 
-Everything it produces is plain Hugo — you can stop using `myprison` at any
-time and keep working on the same site with the `hugo` CLI.
+`myprison` is a static-files blogging platform for the Linux/Unix shell. It
+gives you a friendly curses (text-mode) interface — menus, forms, and a
+built-in text editor — on top of a completely standard
+[Hugo](https://gohugo.io/) site. You write posts in the terminal; Hugo turns
+them into a fast static website; `myprison` uploads the result to your web
+server over SSH or FTP. No database, no web admin panel, no JavaScript
+toolchain — just Markdown files you own, managed from a keyboard.
 
-## Requirements
+```
+┌──────────────────────────────────────────────────────────┐
+│ myprison 0.1.0 — /home/you/blog                          │
+│                                                          │
+│  ❯ Posts — list / edit / delete                          │
+│    New post                                              │
+│    Build site (hugo)                                     │
+│    Preview site (hugo server)                            │
+│    Deploy to web server                                  │
+│    Deployment settings (SSH/FTP)                         │
+│    Site settings (title, URL)                            │
+│    Themes                                                │
+│    Edit Hugo config file                                 │
+│    Quit                                                  │
+│                                                          │
+│ ↑/↓ move   Enter select   q/Esc back                     │
+└──────────────────────────────────────────────────────────┘
+```
 
-- Python 3.9+ (standard library only — no pip dependencies)
-- [`hugo`](https://gohugo.io/installation/) on PATH, to build/preview the site
-  (content management works without it)
-- `rsync` + `ssh` for rsync deployment, `git` for theme installation
+## Why myprison?
 
-## Run
+- **Terminal-native.** Everything happens in one curses UI: create, edit,
+  and delete posts, manage themes, configure deployment, publish. Works over
+  SSH, in a tmux pane, on a Raspberry Pi.
+- **It's just Hugo.** The site tree, config, and post files are plain Hugo.
+  Any theme from [themes.gohugo.io](https://themes.gohugo.io/) works. Stop
+  using `myprison` tomorrow and your site still builds with the `hugo` CLI.
+- **Zero dependencies.** Pure Python 3 standard library. No pip packages,
+  no node_modules.
+- **Built-in editor.** A small nano-style editor for writing posts, with
+  Hugo front matter handled for you. Posts are listed chronologically,
+  newest first.
+- **Publish from the same menu.** Sync the built site to your server with
+  rsync over SSH (incremental, recommended) or FTP/FTPS — credentials and
+  options configured in-app.
+
+## Quick start
 
 ```bash
-python3 -m myprison [SITE_DIR]      # default: current directory
+git clone https://github.com/salvogendut/myprison.git
+cd myprison
+python3 -m myprison ~/blog     # offers to scaffold a new Hugo site there
 ```
 
-or install it:
+Then, from the menus: install a theme (paste any git URL from
+themes.gohugo.io), write your first post, build, and deploy.
 
-```bash
-pip install .
-myprison ~/blog
-```
+## Documentation
 
-If the directory does not contain a Hugo site yet, `myprison` offers to
-scaffold one (`hugo.toml`, `content/posts/`, `themes/`, `static/`, …).
+| Document | Contents |
+|----------|----------|
+| [INSTALL.md](INSTALL.md) | Requirements, installation methods, installing Hugo |
+| [USAGE.md](USAGE.md) | Full guide: menus, the editor, posts, themes, deployment |
 
-## Main menu
+## License
 
-| Entry | What it does |
-|-------|--------------|
-| **Posts** | Chronological list (newest first). `Enter` edit, `n` new, `m` metadata (title/date/draft/tags/slug), `d` delete. |
-| **New post** | Asks for a title, creates `content/posts/<slug>.md` with YAML front matter (`title`, `date`, `draft: true`), opens the editor. |
-| **Build site** | Runs `hugo` (optionally with `--buildDrafts`). |
-| **Preview site** | Runs `hugo server --buildDrafts`; Ctrl-C returns to the menu. |
-| **Deploy to web server** | Optionally builds, then syncs `public/` with rsync-over-SSH or uploads it via FTP/FTPS. |
-| **Deployment settings** | Method (rsync/ftp/ftps), host, port, user, remote path, SSH key, FTP password, `--delete`, build-before-deploy. Stored in `.myprison.json` (mode 600, gitignored). |
-| **Site settings** | Edits `title`, `baseURL`, `languageCode` in `hugo.toml`. |
-| **Themes** | Clone any Hugo theme by its git URL into `themes/`, activate it (`theme = '…'`), or remove it. |
-| **Edit Hugo config file** | Opens `hugo.toml` in the built-in editor for anything the forms don't cover. |
-
-## Built-in editor
-
-A small nano-style editor used for posts and the config file:
-
-- Arrows / Home / End / PgUp / PgDn to move, type to insert (UTF-8 aware)
-- `Ctrl-S` save, `Ctrl-X` exit (asks to save if modified), `Ctrl-K` delete line
-- Tab inserts 4 spaces
-
-## Deployment notes
-
-- **rsync (recommended)**: uses your SSH agent/keys; equivalent to
-  `rsync -avz --delete -e "ssh -p PORT -i KEY" public/ user@host:remote_path`.
-- **FTP/FTPS**: pure-Python (`ftplib`) recursive upload; remote directories are
-  created as needed. The password can be stored in `.myprison.json` or left
-  empty to be prompted at deploy time. FTPS (explicit TLS) is preferred over
-  plain FTP.
-
-## Post format
-
-Posts are Markdown files with YAML front matter, exactly as Hugo expects:
-
-```markdown
----
-title: "Hello world"
-date: 2026-07-06T18:30:00+02:00
-draft: true
-tags: ["meta"]
----
-
-First post!
-```
-
-Posts created with `hugo new` (TOML `+++` front matter) are read fine too;
-unknown front-matter keys are preserved when editing metadata.
+MIT
