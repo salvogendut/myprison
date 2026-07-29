@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import getpass
 import json
+import os
+import shlex
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -143,8 +146,10 @@ def _print_help(provider_name: str) -> None:
         "  /quit                return to myprison\n\n"
         "Current provider: %s\n\n"
         "Ask for blog actions in plain language, for example:\n"
-        "  list my posts\n"
+        "  list my latest posts\n"
         "  make the latest post a draft\n"
+        "  translate my latest post into Lithuanian and publish it\n"
+        "  create a new post with title \"Happy Birthday\" and open the editor\n"
         "  create a post titled \"Hello\" with a short introduction and publish it\n"
         "  write a French post about cold-weather sailing with relevant links and publish it\n"
         "  build and deploy the site\n"
@@ -166,6 +171,11 @@ def _instructions() -> str:
         "include any requested translation and Markdown links, call git_status, then call "
         "publish_post for that post. If the site is a git repository, default to committing "
         "and pushing source changes when publishing a newly created or edited post. "
+        "For requests like 'translate my latest post into LANGUAGE and publish it', read "
+        "the latest post, replace its body with the requested translation, preserve metadata "
+        "unless the user asks otherwise, then publish it. For requests like 'create a new "
+        "post with title TITLE and open the editor', create a draft with that title and "
+        "then call open_post_editor for it. "
         "Summarize actions briefly. For destructive or publishing actions, explain what you "
         "are about to do before calling the tool; the host application will ask for confirmation. "
         "Do not invent files or deployment results that tools did not report."
@@ -183,8 +193,13 @@ def _tools() -> list[dict[str, Any]]:
     return [
         {
             "name": "list_posts",
-            "description": "List Hugo posts, newest first.",
-            "parameters": empty,
+            "description": "List Hugo posts, newest first. Use count for requests like 'latest posts'.",
+            "parameters": {
+                "type": obj,
+                "properties": {"count": {"type": "integer"}},
+                "required": ["count"],
+                "additionalProperties": False,
+            },
         },
         {
             "name": "read_post",
@@ -324,6 +339,19 @@ def _tools() -> list[dict[str, Any]]:
             "description": "Read git branch and short status for the current Hugo site, if it is a git repository.",
             "parameters": empty,
         },
+        {
+            "name": "open_post_editor",
+            "description": "Open a post in the user's terminal editor. Use after creating a post when the user asks to open the editor.",
+            "parameters": {
+                "type": obj,
+                "properties": {
+                    "post": {"type": "string"},
+                    "editor": {"type": "string"},
+                },
+                "required": ["post", "editor"],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -346,7 +374,11 @@ def _confirm_tool(name: str, args: dict) -> bool:
 
 def _run_tool(site: Site, cfg: ToolConfig, name: str, args: dict) -> dict:
     if name == "list_posts":
-        return {"ok": True, "posts": [_post_summary(p, site) for p in posts.list_posts(site.posts_dir)]}
+        all_posts = posts.list_posts(site.posts_dir)
+        count = int(args.get("count") or 0)
+        if count > 0:
+            all_posts = all_posts[:count]
+        return {"ok": True, "posts": [_post_summary(p, site) for p in all_posts]}
     if name == "read_post":
         post = _find_post(site, args["post"])
         return {"ok": True, "post": _post_detail(post, site)}
@@ -425,6 +457,8 @@ def _run_tool(site: Site, cfg: ToolConfig, name: str, args: dict) -> dict:
         return _publish_post(site, cfg, args)
     if name == "git_status":
         return _git_status(site)
+    if name == "open_post_editor":
+        return _open_post_editor(site, args)
     return {"ok": False, "error": "unknown tool: %s" % name}
 
 
@@ -583,3 +617,30 @@ def _commit_source_changes(site: Site, message: str) -> dict:
         "exit_code": rc,
         "output": out[-4000:],
     }
+
+
+def _open_post_editor(site: Site, args: dict) -> dict:
+    post = _find_post(site, args["post"])
+    editor = (args.get("editor") or "").strip() or _default_editor()
+    if not editor:
+        raise AssistantError("no editor found; set EDITOR or VISUAL")
+    argv = shlex.split(editor) + [str(post.path)]
+    print("\nOpening %s with %s\n" % (post.path, editor))
+    rc = subprocess.call(argv, cwd=str(site.root))
+    return {
+        "ok": rc == 0,
+        "exit_code": rc,
+        "editor": editor,
+        "post": _post_summary(posts.parse_post(post.path), site),
+    }
+
+
+def _default_editor() -> str:
+    for env_name in ("VISUAL", "EDITOR"):
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            return value
+    for candidate in ("nano", "micro", "vim", "vi"):
+        if shutil.which(candidate):
+            return candidate
+    return ""

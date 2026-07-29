@@ -130,7 +130,8 @@ screen. It lets you run myprison through AI prompts instead of stepping
 through menus manually. The prompt can inspect and operate on the current
 site through the same high-level actions exposed by the menus:
 list/read/create/update/delete posts, change site settings, manage themes,
-build, and deploy.
+build, deploy, publish posts, inspect git status, and open a post in your
+terminal editor.
 
 AI vendors are provider plugins. The first built-in provider is `chatgpt`,
 backed by the OpenAI API. Third-party providers can register a Python entry
@@ -160,6 +161,12 @@ also ask for confirmation.
 Example prompts:
 
 ```text
+List my latest posts.
+
+Translate my latest post into Lithuanian and publish it.
+
+Create a new post with title 'Happy Birthday' and open the editor.
+
 Make a new post about the difficulties of sailing in cold environments,
 translate it to French, add some relevant links, and publish it.
 
