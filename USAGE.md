@@ -123,7 +123,39 @@ Notes:
 - Changing the **date** in the metadata form changes the post's position in
   the chronological list and on the site.
 
-## 4. Building and previewing
+## 4. AI assistance
+
+**AI assistance** opens a resident command-line prompt outside the curses
+screen. It lets you run myprison through AI prompts instead of stepping
+through menus manually. The prompt can inspect and operate on the current
+site through the same high-level actions exposed by the menus:
+list/read/create/update/delete posts, change site settings, manage themes,
+build, and deploy.
+
+AI vendors are provider plugins. The first built-in provider is `chatgpt`,
+backed by the OpenAI API. Third-party providers can register a Python entry
+point in the `myprison.ai_providers` group. On first use, `chatgpt` reads
+`OPENAI_API_KEY` from the environment; if it is missing, it asks for an API
+key. You can use the key for the session or save it in `.myprison.json`,
+which myprison writes with mode 600. Provider settings are stored separately
+under the `ai.providers` key.
+
+Prompt commands:
+
+| Command | Action |
+|---------|--------|
+| `/help` | show available prompt commands |
+| `/provider NAME` | switch AI provider (`chatgpt` is built in) |
+| `/model MODEL` | set the provider model |
+| `/auth` | enter or replace provider credentials |
+| `/clear` | clear conversation context |
+| `/quit` | return to myprison |
+
+Mutating actions ask for confirmation before running. Destructive and
+publishing actions, such as deleting posts, removing themes, or deploying,
+also ask for confirmation.
+
+## 5. Building and previewing
 
 - **Build site** runs `hugo`, writing the finished website to `public/`.
 - **Preview site** runs `hugo server --buildDrafts` — open the printed URL
@@ -132,7 +164,7 @@ Notes:
 
 Both require the `hugo` binary ([INSTALL.md](INSTALL.md#installing-hugo)).
 
-## 5. Deploying to your web server
+## 6. Deploying to your web server
 
 ### Configure once: Deployment settings
 
@@ -176,7 +208,7 @@ leave the password empty and type it when deploying.
 The sync runs outside the curses UI so you see the full rsync/FTP output,
 then returns to the menu on Enter.
 
-## 6. Publishing on GitHub Pages
+## 7. Publishing on GitHub Pages
 
 There are two independent routes; pick one.
 
@@ -254,7 +286,7 @@ register the theme as a proper submodule
 submodules), or delete `themes/<name>/.git` to commit the theme as plain
 files. `myprison` warns about affected themes when it writes the workflow.
 
-## 7. Interoperating with plain Hugo
+## 8. Interoperating with plain Hugo
 
 The site is a normal Hugo site at all times. You can freely mix tools:
 

@@ -14,4 +14,4 @@ license = { text = "MIT" }
 myprison = "myprison.__main__:main"
 
 [tool.setuptools]
-packages = ["myprison"]
+packages = ["myprison", "myprison.ai_providers"]

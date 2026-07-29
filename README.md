@@ -16,6 +16,7 @@ toolchain — just Markdown files you own, managed from a keyboard.
 │                                                          │
 │  ❯ Posts — list / edit / delete                          │
 │    New post                                              │
+│    AI assistance                                         │
 │    Build site (hugo)                                     │
 │    Preview site (hugo server)                            │
 │    Deploy (rsync / FTP / GitHub Pages)                   │
@@ -53,6 +54,11 @@ toolchain — just Markdown files you own, managed from a keyboard.
   configure the repo's Pages source for you — either “Deploy from a
   branch” via the GitHub API, or the official Actions workflow so GitHub
   builds the site itself and no local Hugo is needed.
+- **AI assistance.** Open a resident prompt from the management menu and
+  run myprison through AI prompts instead of stepping through menus: ask it
+  to create posts, edit metadata, build, deploy, or inspect the current
+  Hugo site. AI vendors plug in through a provider registry; the first
+  provider is `chatgpt`, using `OPENAI_API_KEY` or first-use authentication.
 
 ## Quick start
 

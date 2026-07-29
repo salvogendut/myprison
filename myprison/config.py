@@ -1,6 +1,6 @@
 """Per-site tool configuration stored in .myprison.json at the site root.
 
-Holds deployment settings. The file may contain an FTP password, so it is
+Holds deployment and AI settings. The file may contain secrets, so it is
 written with mode 0600 and should be kept out of version control.
 """
 
@@ -29,11 +29,24 @@ DEFAULT_DEPLOY = {
     "include_drafts": False,   # pass --buildDrafts to hugo
 }
 
+DEFAULT_AI = {
+    "provider": "chatgpt",
+    "providers": {
+        "chatgpt": {
+            "model": "gpt-5.6-terra",
+            "api_key": "",
+        },
+    },
+}
+
 
 class ToolConfig:
     def __init__(self, site_root: Path):
         self.path = Path(site_root) / CONFIG_FILENAME
-        self.data: dict = {"deploy": dict(DEFAULT_DEPLOY)}
+        self.data: dict = {
+            "deploy": dict(DEFAULT_DEPLOY),
+            "ai": dict(DEFAULT_AI),
+        }
         self.load()
 
     def load(self) -> None:
@@ -44,7 +57,23 @@ class ToolConfig:
                 return
             deploy = dict(DEFAULT_DEPLOY)
             deploy.update(loaded.get("deploy", {}))
-            self.data = {"deploy": deploy}
+            ai = dict(DEFAULT_AI)
+            ai.update(loaded.get("ai", {}))
+            # Backward compatibility for early AI config drafts that stored
+            # model/api_key directly under "ai".
+            providers = dict(DEFAULT_AI["providers"])
+            providers.update(ai.get("providers", {}))
+            if ai.get("model") or ai.get("api_key"):
+                chatgpt = dict(providers.get("chatgpt", {}))
+                if ai.get("model"):
+                    chatgpt["model"] = ai["model"]
+                if ai.get("api_key"):
+                    chatgpt["api_key"] = ai["api_key"]
+                providers["chatgpt"] = chatgpt
+                ai.pop("model", None)
+                ai.pop("api_key", None)
+            ai["providers"] = providers
+            self.data = {"deploy": deploy, "ai": ai}
 
     def save(self) -> None:
         self.path.write_text(
@@ -58,3 +87,7 @@ class ToolConfig:
     @property
     def deploy(self) -> dict:
         return self.data["deploy"]
+
+    @property
+    def ai(self) -> dict:
+        return self.data["ai"]

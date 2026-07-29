@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import __version__, deploy, posts, ui
+from .assistant import run_ai_assistant
 from .config import ToolConfig
 from .editor import Editor
 from .hugosite import Site
@@ -419,12 +420,18 @@ class App:
             ]
         ui.message(self.stdscr, "GitHub Actions workflow created", "\n".join(lines))
 
+    # -- AI assistance ---------------------------------------------------------------
+
+    def ai_assistance(self) -> None:
+        run_external(self.stdscr, lambda: run_ai_assistant(self.site, self.cfg))
+
     # -- main menu -------------------------------------------------------------------------
 
     def run(self) -> None:
         entries = [
             ("Posts — list / edit / delete", self.posts_screen),
             ("New post", self.new_post),
+            ("AI assistance", self.ai_assistance),
             ("Build site (hugo)", self.build),
             ("Preview site (hugo server)", self.preview),
             ("Deploy (rsync / FTP / GitHub Pages)", self.do_deploy),
