@@ -134,11 +134,13 @@ build, and deploy.
 
 AI vendors are provider plugins. The first built-in provider is `chatgpt`,
 backed by the OpenAI API. Third-party providers can register a Python entry
-point in the `myprison.ai_providers` group. On first use, `chatgpt` reads
-`OPENAI_API_KEY` from the environment; if it is missing, it asks for an API
-key. You can use the key for the session or save it in `.myprison.json`,
-which myprison writes with mode 600. Provider settings are stored separately
-under the `ai.providers` key.
+point in the `myprison.ai_providers` group. The `chatgpt` provider enables
+provider-native web search by default, so prompts can ask for relevant links
+as part of a post. On first use, `chatgpt` reads `OPENAI_API_KEY` from the
+environment; if it is missing, it asks for an API key. You can use the key
+for the session or save it in `.myprison.json`, which myprison writes with
+mode 600. Provider settings are stored separately under the `ai.providers`
+key.
 
 Prompt commands:
 
@@ -154,6 +156,18 @@ Prompt commands:
 Mutating actions ask for confirmation before running. Destructive and
 publishing actions, such as deleting posts, removing themes, or deploying,
 also ask for confirmation.
+
+Example prompts:
+
+```text
+Make a new post about the difficulties of sailing in cold environments,
+translate it to French, add some relevant links, and publish it.
+
+List my posts and suggest which drafts are ready to publish.
+
+Rewrite the latest post introduction in a more technical tone, then build
+the site.
+```
 
 ## 5. Building and previewing
 

@@ -35,6 +35,7 @@ DEFAULT_AI = {
         "chatgpt": {
             "model": "gpt-5.6-terra",
             "api_key": "",
+            "web_search": True,
         },
     },
 }

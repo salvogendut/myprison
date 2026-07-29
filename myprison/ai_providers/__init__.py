@@ -36,8 +36,13 @@ class AIProvider:
     def authenticate(self, settings: dict, cfg: ToolConfig, force: bool = False) -> str:
         raise NotImplementedError
 
+    def native_tools(self, settings: dict) -> list[dict[str, Any]]:
+        """Provider-owned tools that do not call back into myprison."""
+        return []
+
     def run_turn(
         self,
+        settings: dict,
         key: str,
         model: str,
         instructions: str,

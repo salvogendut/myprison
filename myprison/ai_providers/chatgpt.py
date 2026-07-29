@@ -41,8 +41,14 @@ class ChatGPTProvider(AIProvider):
             print("Using key for this session only.")
         return key
 
+    def native_tools(self, settings: dict) -> list[dict[str, Any]]:
+        if settings.get("web_search", True):
+            return [{"type": "web_search", "search_context_size": "medium"}]
+        return []
+
     def run_turn(
         self,
+        settings: dict,
         key: str,
         model: str,
         instructions: str,
@@ -52,7 +58,7 @@ class ChatGPTProvider(AIProvider):
     ) -> str:
         input_items: list[dict[str, Any]] = list(messages)
         for _ in range(8):
-            response = self._request(key, model, instructions, input_items, tools)
+            response = self._request(key, model, instructions, input_items, tools, settings)
             output = response.get("output") or []
             calls = [self._tool_call(item) for item in output if item.get("type") == "function_call"]
             if not calls:
@@ -75,12 +81,14 @@ class ChatGPTProvider(AIProvider):
         instructions: str,
         input_items: list[dict[str, Any]],
         tools: list[dict[str, Any]],
+        settings: dict,
     ) -> dict:
         body = {
             "model": model,
             "instructions": instructions,
             "input": input_items,
-            "tools": [self._responses_tool(tool) for tool in tools],
+            "tools": [self._responses_tool(tool) for tool in tools]
+            + self.native_tools(settings),
             "tool_choice": "auto",
         }
         data = json.dumps(body).encode("utf-8")

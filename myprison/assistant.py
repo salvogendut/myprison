@@ -14,8 +14,10 @@ from .ai_providers import ProviderError, ToolCall, load_provider, provider_names
 from .config import ToolConfig
 from .hugosite import Site
 
-READ_ONLY_TOOLS = {"list_posts", "read_post", "get_site_config", "list_themes"}
-DESTRUCTIVE_TOOLS = {"delete_post", "remove_theme", "deploy_site"}
+READ_ONLY_TOOLS = {
+    "list_posts", "read_post", "get_site_config", "list_themes", "git_status",
+}
+DESTRUCTIVE_TOOLS = {"delete_post", "remove_theme", "deploy_site", "publish_post"}
 
 
 class AssistantError(Exception):
@@ -111,6 +113,7 @@ def run_ai_assistant(site: Site, cfg: ToolConfig) -> None:
         messages.append({"role": "user", "content": prompt})
         try:
             reply = provider.run_turn(
+                provider_settings,
                 key,
                 model,
                 _instructions(),
@@ -142,9 +145,9 @@ def _print_help(provider_name: str) -> None:
         "Ask for blog actions in plain language, for example:\n"
         "  list my posts\n"
         "  make the latest post a draft\n"
-        "  create a post titled \"Hello\" with a short introduction\n"
-        "  build the site\n"
-        "  deploy the site\n"
+        "  create a post titled \"Hello\" with a short introduction and publish it\n"
+        "  write a French post about cold-weather sailing with relevant links and publish it\n"
+        "  build and deploy the site\n"
         % (", ".join(provider_names()), provider_name)
     )
 
@@ -158,6 +161,11 @@ def _instructions() -> str:
     return (
         "You are the resident AI assistant inside myprison, a terminal Hugo blog manager. "
         "Use tools to inspect and change the site instead of guessing. "
+        "For requests like 'write/create a post ... and publish it', create or update the "
+        "post body yourself, use provider web search when available for relevant links, "
+        "include any requested translation and Markdown links, call git_status, then call "
+        "publish_post for that post. If the site is a git repository, default to committing "
+        "and pushing source changes when publishing a newly created or edited post. "
         "Summarize actions briefly. For destructive or publishing actions, explain what you "
         "are about to do before calling the tool; the host application will ask for confirmation. "
         "Do not invent files or deployment results that tools did not report."
@@ -166,11 +174,17 @@ def _instructions() -> str:
 
 def _tools() -> list[dict[str, Any]]:
     obj = "object"
+    empty = {
+        "type": obj,
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    }
     return [
         {
             "name": "list_posts",
             "description": "List Hugo posts, newest first.",
-            "parameters": {"type": obj, "properties": {}, "additionalProperties": False},
+            "parameters": empty,
         },
         {
             "name": "read_post",
@@ -228,7 +242,7 @@ def _tools() -> list[dict[str, Any]]:
         {
             "name": "get_site_config",
             "description": "Read key site and deployment configuration.",
-            "parameters": {"type": obj, "properties": {}, "additionalProperties": False},
+            "parameters": empty,
         },
         {
             "name": "set_site_config",
@@ -243,7 +257,7 @@ def _tools() -> list[dict[str, Any]]:
         {
             "name": "list_themes",
             "description": "List installed Hugo themes and the active theme.",
-            "parameters": {"type": obj, "properties": {}, "additionalProperties": False},
+            "parameters": empty,
         },
         {
             "name": "set_theme",
@@ -288,7 +302,27 @@ def _tools() -> list[dict[str, Any]]:
         {
             "name": "deploy_site",
             "description": "Deploy the built site using current deployment settings.",
-            "parameters": {"type": obj, "properties": {}, "additionalProperties": False},
+            "parameters": empty,
+        },
+        {
+            "name": "publish_post",
+            "description": "Publish a post: mark it non-draft, build the site, optionally commit/push source changes, and deploy using current settings.",
+            "parameters": {
+                "type": obj,
+                "properties": {
+                    "post": {"type": "string"},
+                    "commit_source": {"type": "boolean"},
+                    "push_source": {"type": "boolean"},
+                    "commit_message": {"type": "string"},
+                },
+                "required": ["post", "commit_source", "push_source", "commit_message"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "git_status",
+            "description": "Read git branch and short status for the current Hugo site, if it is a git repository.",
+            "parameters": empty,
         },
     ]
 
@@ -387,6 +421,10 @@ def _run_tool(site: Site, cfg: ToolConfig, name: str, args: dict) -> dict:
         return {"ok": rc == 0, "exit_code": rc, "output": out[-6000:]}
     if name == "deploy_site":
         return _deploy_site(site, cfg)
+    if name == "publish_post":
+        return _publish_post(site, cfg, args)
+    if name == "git_status":
+        return _git_status(site)
     return {"ok": False, "error": "unknown tool: %s" % name}
 
 
@@ -469,3 +507,79 @@ def _deploy_site(site: Site, cfg: ToolConfig) -> dict:
         n = deploy.ftp_upload(d, pub, password)
         return {"ok": True, "method": method, "uploaded_files": n}
     raise AssistantError("unknown deployment method: %s" % method)
+
+
+def _publish_post(site: Site, cfg: ToolConfig, args: dict) -> dict:
+    post = _find_post(site, args["post"])
+    post.draft = False
+    post.save()
+    result = {
+        "ok": True,
+        "post": _post_summary(post, site),
+        "source_commit": None,
+        "source_push": None,
+        "deploy": None,
+    }
+    if args.get("commit_source"):
+        result["source_commit"] = _commit_source_changes(
+            site,
+            args.get("commit_message") or "Publish %s" % post.title,
+        )
+        if not result["source_commit"].get("ok"):
+            result["ok"] = False
+            return result
+        if args.get("push_source"):
+            rc, out = _run_subprocess(["git", "push"], site.root, timeout=300)
+            result["source_push"] = {
+                "ok": rc == 0,
+                "exit_code": rc,
+                "output": out[-4000:],
+            }
+            if rc != 0:
+                result["ok"] = False
+                return result
+    result["deploy"] = _deploy_site(site, cfg)
+    if not result["deploy"].get("ok"):
+        result["ok"] = False
+    return result
+
+
+def _git_status(site: Site) -> dict:
+    if not (site.root / ".git").exists():
+        return {"ok": False, "error": "site is not a git repository"}
+    branch_rc, branch = _run_subprocess(
+        ["git", "branch", "--show-current"], site.root, timeout=30
+    )
+    status_rc, status = _run_subprocess(
+        ["git", "status", "--short", "--branch"], site.root, timeout=30
+    )
+    return {
+        "ok": branch_rc == 0 and status_rc == 0,
+        "branch": branch.strip(),
+        "status": status,
+    }
+
+
+def _commit_source_changes(site: Site, message: str) -> dict:
+    if not (site.root / ".git").exists():
+        return {"ok": False, "error": "site is not a git repository"}
+    paths = [
+        "archetypes", "content", "layouts", "static", "themes",
+        "hugo.toml", "config.toml", ".github", ".gitignore", "README.md",
+    ]
+    existing = [path for path in paths if (site.root / path).exists()]
+    if not existing:
+        return {"ok": False, "error": "no source paths found to stage"}
+    rc, out = _run_subprocess(["git", "add", *existing], site.root, timeout=120)
+    if rc != 0:
+        return {"ok": False, "stage": "add", "exit_code": rc, "output": out[-4000:]}
+    rc, out = _run_subprocess(["git", "diff", "--cached", "--quiet"], site.root, timeout=30)
+    if rc == 0:
+        return {"ok": True, "changed": False, "message": "no source changes to commit"}
+    rc, out = _run_subprocess(["git", "commit", "-m", message], site.root, timeout=120)
+    return {
+        "ok": rc == 0,
+        "changed": True,
+        "exit_code": rc,
+        "output": out[-4000:],
+    }
