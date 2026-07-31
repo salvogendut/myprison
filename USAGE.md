@@ -133,22 +133,24 @@ list/read/create/update/delete posts, change site settings, manage themes,
 build, deploy, publish posts, inspect git status, and open a post in your
 terminal editor.
 
-AI vendors are provider plugins. The first built-in provider is `chatgpt`,
-backed by the OpenAI API. Third-party providers can register a Python entry
-point in the `myprison.ai_providers` group. The `chatgpt` provider enables
-provider-native web search by default, so prompts can ask for relevant links
-as part of a post. On first use, `chatgpt` reads `OPENAI_API_KEY` from the
-environment; if it is missing, it asks for an API key. You can use the key
-for the session or save it in `.myprison.json`, which myprison writes with
-mode 600. Provider settings are stored separately under the `ai.providers`
-key.
+AI vendors are provider plugins. The built-in providers are `chatgpt`,
+backed by the OpenAI API, and `opencode`, backed by the OpenCode Zen
+gateway (https://opencode.ai/zen). Third-party providers can register a
+Python entry point in the `myprison.ai_providers` group. The `chatgpt`
+provider enables provider-native web search by default, so prompts can ask
+for relevant links as part of a post. On first use, `chatgpt` reads
+`OPENAI_API_KEY` from the environment and `opencode` reads
+`OPENCODE_API_KEY`; if the key is missing, the provider asks for an API key.
+You can use the key for the session or save it in `.myprison.json`, which
+myprison writes with mode 600. Provider settings are stored separately
+under the `ai.providers` key.
 
 Prompt commands:
 
 | Command | Action |
 |---------|--------|
 | `/help` | show available prompt commands |
-| `/provider NAME` | switch AI provider (`chatgpt` is built in) |
+| `/provider NAME` | switch AI provider (`chatgpt` and `opencode` are built in) |
 | `/model MODEL` | set the provider model |
 | `/auth` | enter or replace provider credentials |
 | `/clear` | clear conversation context |
