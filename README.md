@@ -58,9 +58,10 @@ toolchain — just Markdown files you own, managed from a keyboard.
   run myprison through AI prompts instead of stepping through menus: ask it
   to list latest posts, create posts, translate posts, open your editor,
   edit metadata, build, deploy, publish, or inspect the current Hugo site.
-  AI vendors plug in through a provider registry; the first
-  provider is `chatgpt`, using `OPENAI_API_KEY` or first-use authentication,
-  with provider-native web search enabled for finding relevant links.
+   AI vendors plug in through a provider registry; the built-in
+   providers are `chatgpt`, using `OPENAI_API_KEY` or first-use authentication
+   with provider-native web search enabled for finding relevant links, and
+   `opencode`, backed by the OpenCode Zen gateway using `OPENCODE_API_KEY`.
 
 ## Quick start
 

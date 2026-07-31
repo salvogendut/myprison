@@ -59,6 +59,10 @@ def load_provider(name: str) -> AIProvider:
         from .chatgpt import ChatGPTProvider
 
         return ChatGPTProvider()
+    if name == "opencode":
+        from .opencode import OpenCodeProvider
+
+        return OpenCodeProvider()
     for entry_point in _entry_points():
         if entry_point.name == name:
             provider = entry_point.load()()
@@ -69,7 +73,7 @@ def load_provider(name: str) -> AIProvider:
 
 
 def provider_names() -> list[str]:
-    return sorted({"chatgpt", *[ep.name for ep in _entry_points()]})
+    return sorted({"chatgpt", "opencode", *[ep.name for ep in _entry_points()]})
 
 
 def _entry_points():

@@ -19,6 +19,8 @@ class ChatGPTProvider(AIProvider):
     name = "chatgpt"
     display_name = "ChatGPT"
     default_model = "gpt-5.6-terra"
+    responses_url = RESPONSES_URL
+    api_label = "OpenAI"
 
     def api_key(self, settings: dict) -> str:
         return (
@@ -93,7 +95,7 @@ class ChatGPTProvider(AIProvider):
         }
         data = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(
-            RESPONSES_URL,
+            self.responses_url,
             data=data,
             method="POST",
             headers={
@@ -112,9 +114,9 @@ class ChatGPTProvider(AIProvider):
                 msg = payload.get("error", {}).get("message") or raw
             except ValueError:
                 msg = raw[:500]
-            raise ProviderError("OpenAI API error HTTP %d: %s" % (exc.code, msg))
+            raise ProviderError("%s API error HTTP %d: %s" % (self.api_label, exc.code, msg))
         except urllib.error.URLError as exc:
-            raise ProviderError("OpenAI API request failed: %s" % exc)
+            raise ProviderError("%s API request failed: %s" % (self.api_label, exc))
 
     def _responses_tool(self, tool: dict[str, Any]) -> dict[str, Any]:
         return {
