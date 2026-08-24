@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import subprocess
+import os
+import shlex
+import shutil
 from pathlib import Path
 
 from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Button, DataTable, Footer, Header, Input, RichLog, Static, TextArea
 
@@ -35,6 +39,47 @@ class ResizeHandle(Widget):
         if self.app.mouse_captured is self:
             self.release_mouse()
             event.stop()
+
+
+class SettingsScreen(ModalScreen[str]):
+    """Central settings launcher."""
+
+    CSS = """
+    SettingsScreen {
+        align: center middle;
+    }
+
+    #settings-dialog {
+        width: 68;
+        height: auto;
+        border: thick $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #settings-dialog Button {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="settings-dialog"):
+            yield Static("Settings", id="settings-title")
+            yield Button("Deployment settings", id="settings-deploy")
+            yield Button("GitHub Pages: deploy from a branch (setup)", id="settings-gh-branch")
+            yield Button("GitHub Pages: build via Actions (setup)", id="settings-gh-actions")
+            yield Button("Site settings (title, URL)", id="settings-site")
+            yield Button("Themes", id="settings-themes")
+            yield Button("Edit Hugo config file", id="settings-config")
+            yield Button("Close", id="settings-close", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id or ""
+        if button_id == "settings-close":
+            self.dismiss("")
+        else:
+            self.dismiss(button_id)
 
 
 class MyprisonTextualApp(App):
@@ -141,6 +186,11 @@ class MyprisonTextualApp(App):
         padding: 0 1;
     }
 
+    #settings {
+        background: $error-lighten-1;
+        color: $text;
+    }
+
     #status {
         height: 1;
         padding: 0 1;
@@ -201,6 +251,7 @@ class MyprisonTextualApp(App):
                     yield Button("Build", id="build")
                     yield Button("Preview", id="preview")
                     yield Button("Deploy", id="deploy")
+                    yield Button("Settings", id="settings")
                     yield Button("AI assistance", id="ai")
                     yield Button("Editor: Default", id="edit-style")
                     yield Button("Quit", id="quit", variant="error")
@@ -259,6 +310,8 @@ class MyprisonTextualApp(App):
             self.action_preview_site()
         elif button_id == "deploy":
             self.action_deploy_site()
+        elif button_id == "settings":
+            self.action_settings()
         elif button_id == "ai":
             self.action_ai_assistance()
         elif button_id == "edit-style":
@@ -276,6 +329,26 @@ class MyprisonTextualApp(App):
 
     def action_refresh_posts(self) -> None:
         self.refresh_posts()
+
+    def action_settings(self) -> None:
+        self.push_screen(SettingsScreen(), self._handle_settings_choice)
+
+    def _handle_settings_choice(self, choice: str) -> None:
+        if not choice:
+            return
+        actions = {
+            "settings-deploy": self._settings_deployment,
+            "settings-gh-branch": self._settings_github_branch,
+            "settings-gh-actions": self._settings_github_actions,
+            "settings-site": self._settings_site,
+            "settings-themes": self._settings_themes,
+            "settings-config": self._settings_config,
+        }
+        action = actions.get(choice)
+        if action is None:
+            self._status("Unknown settings action: %s" % choice)
+            return
+        action()
 
     def action_toggle_edit_style(self) -> None:
         button = self.query_one("#edit-style", Button)
@@ -381,6 +454,77 @@ class MyprisonTextualApp(App):
         self.action_save_post()
         with self.suspend():
             run_ai_assistant(self.site, self.cfg)
+        self.refresh_posts()
+
+    def _settings_deployment(self) -> None:
+        self._edit_file(self.cfg.path, "deployment settings")
+        self.cfg.load()
+
+    def _settings_github_branch(self) -> None:
+        target = self.cfg.deploy.get("gh_repo", "").strip()
+        if not target:
+            self._status("Set gh_repo in deployment settings first.")
+            return
+        local = Path(target).expanduser()
+        if (local / ".git").exists():
+            remote = _git_output(local, "remote", "get-url", "origin")
+            branch = _git_output(local, "rev-parse", "--abbrev-ref", "HEAD") or "main"
+        else:
+            remote = target
+            branch = (self.cfg.deploy.get("gh_branch") or "gh-pages").strip()
+        parsed = deploy.parse_github_repo(remote)
+        if parsed is None:
+            self._status("Not a GitHub repository: %s" % (remote or "(none)"))
+            return
+        owner, repo = parsed
+        self._log("Configuring Pages branch source for %s/%s:%s" % (owner, repo, branch))
+        with self.suspend():
+            deploy.github_pages_set_branch_source(owner, repo, branch)
+            try:
+                input("\n[ press Enter to return to myprison ]")
+            except (EOFError, KeyboardInterrupt):
+                pass
+        self._status("GitHub Pages branch setup finished.")
+
+    def _settings_github_actions(self) -> None:
+        path = self.site.write_github_workflow()
+        self._log("Wrote %s" % path)
+        self._status("Wrote GitHub Actions workflow.")
+
+    def _settings_site(self) -> None:
+        config_path = self.site.config_path
+        if config_path is None:
+            self._status("No Hugo config file found.")
+            return
+        self._edit_file(config_path, "site settings")
+
+    def _settings_themes(self) -> None:
+        themes = self.site.list_themes()
+        active = self.site.get_config_value("theme") or "(none)"
+        self._log("Active theme: %s" % active)
+        self._log("Installed themes: %s" % (", ".join(themes) if themes else "(none)"))
+        self._status("Theme management forms are not built yet; see console.")
+
+    def _settings_config(self) -> None:
+        config_path = self.site.config_path
+        if config_path is None:
+            self._status("No Hugo config file found.")
+            return
+        self._edit_file(config_path, "Hugo config")
+
+    def _edit_file(self, path: Path, label: str) -> None:
+        self.action_save_post()
+        with self.suspend():
+            editor = _default_editor()
+            if not editor:
+                print("No editor found. Set EDITOR or VISUAL.")
+            else:
+                print("Opening %s with %s" % (label, editor))
+                subprocess.call([*shlex.split(editor), str(path)], cwd=str(self.site.root))
+            try:
+                input("\n[ press Enter to return to myprison ]")
+            except (EOFError, KeyboardInterrupt):
+                pass
         self.refresh_posts()
 
     def on_key(self, event: events.Key) -> None:
@@ -604,3 +748,23 @@ def _deploy_current_site(site: Site, cfg: ToolConfig, log=print) -> str:
         n = deploy.ftp_upload(d, pub, d["ftp_password"], log=log)
         return "Uploaded %d files over %s." % (n, method)
     return "Unknown deployment method: %s" % method
+
+
+def _git_output(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def _default_editor() -> str:
+    for env_name in ("VISUAL", "EDITOR"):
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            return value
+    for candidate in ("nano", "micro", "vim", "vi"):
+        if shutil.which(candidate):
+            return candidate
+    return ""
