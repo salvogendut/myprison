@@ -7,12 +7,34 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Footer, Header, Input, Static, TextArea
+from textual import events
+from textual.widget import Widget
+from textual.widgets import Button, DataTable, Footer, Header, Input, RichLog, Static, TextArea
 
 from . import deploy, posts
 from .assistant import run_ai_assistant
 from .config import ToolConfig
 from .hugosite import Site
+
+
+class ResizeHandle(Widget):
+    """Draggable divider between the posts sidebar and editor workspace."""
+
+    can_focus = False
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        self.capture_mouse()
+        event.stop()
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        if self.app.mouse_captured is self:
+            self.app.adjust_sidebar_width(event.delta_x)
+            event.stop()
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        if self.app.mouse_captured is self:
+            self.release_mouse()
+            event.stop()
 
 
 class MyprisonTextualApp(App):
@@ -33,6 +55,16 @@ class MyprisonTextualApp(App):
         border: solid $surface;
     }
 
+    #splitter {
+        width: 1;
+        min-width: 1;
+        background: $primary-background;
+    }
+
+    #splitter:hover {
+        background: $accent;
+    }
+
     #workspace {
         width: 1fr;
         border: solid $surface;
@@ -40,6 +72,17 @@ class MyprisonTextualApp(App):
 
     #post-table {
         height: 1fr;
+    }
+
+    #console-title {
+        height: 1;
+        padding: 0 1;
+    }
+
+    #console {
+        height: 1fr;
+        min-height: 6;
+        border: solid $surface;
     }
 
     #new-title {
@@ -98,6 +141,9 @@ class MyprisonTextualApp(App):
                 with Horizontal(id="sidebar-actions"):
                     yield Button("New", id="new")
                     yield Button("Refresh", id="refresh")
+                yield Static("Console", id="console-title")
+                yield RichLog(id="console", wrap=True, highlight=False, markup=False)
+            yield ResizeHandle(id="splitter")
             with Vertical(id="workspace"):
                 yield Static("No post selected", id="metadata")
                 yield TextArea("", id="editor")
@@ -107,6 +153,7 @@ class MyprisonTextualApp(App):
                     yield Button("Build", id="build")
                     yield Button("Deploy", id="deploy")
                     yield Button("AI assistance", id="ai")
+                    yield Button("Quit", id="quit", variant="error")
                 yield Static("", id="status")
         yield Footer()
 
@@ -115,6 +162,7 @@ class MyprisonTextualApp(App):
         table.cursor_type = "row"
         editor = self.query_one("#editor", TextArea)
         _set_text(editor, "")
+        self._log("Console ready.")
         self.refresh_posts()
 
     def refresh_posts(self) -> None:
@@ -161,6 +209,8 @@ class MyprisonTextualApp(App):
             self.action_deploy_site()
         elif button_id == "ai":
             self.action_ai_assistance()
+        elif button_id == "quit":
+            self.exit()
 
     def action_refresh_posts(self) -> None:
         self.refresh_posts()
@@ -205,20 +255,25 @@ class MyprisonTextualApp(App):
     def action_build_site(self) -> None:
         if not self.site.hugo_available():
             self._status("Hugo is not on PATH.")
+            self._log("Build skipped: hugo is not on PATH.")
             return
         self.action_save_post()
         argv = self.site.build_argv(include_drafts=self.cfg.deploy["include_drafts"])
+        self._log("$ %s" % " ".join(argv))
         rc, output = _run(argv, self.site.root)
+        self._log(output or "(no output)")
         self._status("Build exit %d%s" % (rc, _tail_hint(output)))
 
     def action_deploy_site(self) -> None:
         self.action_save_post()
         try:
-            result = _deploy_current_site(self.site, self.cfg)
+            result = _deploy_current_site(self.site, self.cfg, self._log)
         except Exception as exc:
             self._status("Deploy failed: %s" % exc)
+            self._log("Deploy failed: %s" % exc)
             return
         self._status(result)
+        self._log(result)
 
     def action_ai_assistance(self) -> None:
         self.action_save_post()
@@ -249,6 +304,19 @@ class MyprisonTextualApp(App):
     def _status(self, text: str) -> None:
         self.query_one("#status", Static).update(text.replace("\n", " ")[:240])
 
+    def _log(self, text: str) -> None:
+        log = self.query_one("#console", RichLog)
+        for line in str(text).splitlines() or [""]:
+            log.write(line)
+
+    def adjust_sidebar_width(self, delta: int) -> None:
+        sidebar = self.query_one("#sidebar", Vertical)
+        current = sidebar.outer_size.width
+        max_width = max(36, self.size.width - 60)
+        new_width = max(28, min(max_width, current + int(delta)))
+        sidebar.styles.width = new_width
+        self._status("Sidebar width: %d" % new_width)
+
 
 def _set_text(editor: TextArea, text: str) -> None:
     if hasattr(editor, "load_text"):
@@ -271,12 +339,15 @@ def _tail_hint(output: str) -> str:
     return ": %s" % lines[-1] if lines else ""
 
 
-def _deploy_current_site(site: Site, cfg: ToolConfig) -> str:
+def _deploy_current_site(site: Site, cfg: ToolConfig, log=print) -> str:
     d = cfg.deploy
     if d.get("build_first", True):
         if not site.hugo_available():
             raise RuntimeError("hugo is not on PATH")
-        rc, output = _run(site.build_argv(bool(d.get("include_drafts"))), site.root)
+        argv = site.build_argv(bool(d.get("include_drafts")))
+        log("$ %s" % " ".join(argv))
+        rc, output = _run(argv, site.root)
+        log(output or "(no output)")
         if rc != 0:
             return "Build failed before deploy%s" % _tail_hint(output)
     pub = site.public_dir
@@ -284,18 +355,21 @@ def _deploy_current_site(site: Site, cfg: ToolConfig) -> str:
         return "Nothing to deploy: public/ is empty."
     method = d.get("method")
     if method == "github":
-        info = deploy.github_pages_publish(d, pub, log=lambda _msg: None)
+        info = deploy.github_pages_publish(d, pub, log=log)
         return "GitHub deploy complete%s" % (
             " (%s)" % info.get("sha", "")[:12] if info else ""
         )
     if method == "rsync":
         if not d.get("host"):
             return "Deploy host is not configured."
-        rc, output = _run(deploy.rsync_argv(d, pub), site.root)
+        argv = deploy.rsync_argv(d, pub)
+        log("$ %s" % " ".join(argv))
+        rc, output = _run(argv, site.root)
+        log(output or "(no output)")
         return "rsync exit %d%s" % (rc, _tail_hint(output))
     if method in ("ftp", "ftps"):
         if not d.get("ftp_password"):
             return "FTP password is not configured; use the curses deploy flow."
-        n = deploy.ftp_upload(d, pub, d["ftp_password"], log=lambda _msg: None)
+        n = deploy.ftp_upload(d, pub, d["ftp_password"], log=log)
         return "Uploaded %d files over %s." % (n, method)
     return "Unknown deployment method: %s" % method
