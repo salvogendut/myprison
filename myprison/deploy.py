@@ -56,7 +56,13 @@ def _write_pages_extras(dest: Path, deploy: dict) -> None:
 def _git(repo: Path, *args: str, log=print) -> subprocess.CompletedProcess:
     argv = ["git", "-C", str(repo), *args]
     log("$ %s" % " ".join(argv))
-    return subprocess.run(argv, check=True)
+    result = subprocess.run(argv, capture_output=True, text=True)
+    if result.stdout:
+        log(result.stdout.rstrip())
+    if result.stderr:
+        log(result.stderr.rstrip())
+    result.check_returncode()
+    return result
 
 
 def parse_github_repo(url: str) -> tuple[str, str] | None:

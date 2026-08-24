@@ -5,9 +5,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual import events
 from textual.widget import Widget
 from textual.widgets import Button, DataTable, Footer, Header, Input, RichLog, Static, TextArea
 
@@ -50,8 +50,8 @@ class MyprisonTextualApp(App):
     }
 
     #sidebar {
-        width: 42;
-        min-width: 32;
+        width: 76;
+        min-width: 42;
         border: solid $surface;
     }
 
@@ -89,6 +89,20 @@ class MyprisonTextualApp(App):
         margin: 1 1 0 1;
     }
 
+    #format-title {
+        height: 1;
+        padding: 0 1;
+    }
+
+    #format-actions {
+        height: auto;
+        padding: 0 1;
+    }
+
+    #format-actions Button {
+        min-width: 7;
+    }
+
     #metadata {
         height: 5;
         padding: 0 1;
@@ -119,6 +133,7 @@ class MyprisonTextualApp(App):
         ("ctrl+n", "new_post", "New"),
         ("ctrl+d", "toggle_draft", "Draft"),
         ("ctrl+b", "build_site", "Build"),
+        ("ctrl+p", "preview_site", "Preview"),
         ("ctrl+a", "ai_assistance", "AI"),
         ("f5", "refresh_posts", "Refresh"),
         ("ctrl+q", "quit", "Quit"),
@@ -130,6 +145,10 @@ class MyprisonTextualApp(App):
         self.cfg = ToolConfig(self.site.root)
         self.current_post: posts.Post | None = None
         self._columns_ready = False
+        self.edit_style = "current"
+        self.vi_insert = True
+        self._vi_pending = ""
+        self._vi_command = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -141,6 +160,12 @@ class MyprisonTextualApp(App):
                 with Horizontal(id="sidebar-actions"):
                     yield Button("New", id="new")
                     yield Button("Refresh", id="refresh")
+                yield Static("Editor tools", id="format-title")
+                with Horizontal(id="format-actions"):
+                    yield Button("B", id="fmt-bold")
+                    yield Button("I", id="fmt-italic")
+                    yield Button("Link", id="fmt-link")
+                    yield Button("Image", id="fmt-image")
                 yield Static("Console", id="console-title")
                 yield RichLog(id="console", wrap=True, highlight=False, markup=False)
             yield ResizeHandle(id="splitter")
@@ -151,8 +176,10 @@ class MyprisonTextualApp(App):
                     yield Button("Save", id="save", variant="primary")
                     yield Button("Draft", id="draft")
                     yield Button("Build", id="build")
+                    yield Button("Preview", id="preview")
                     yield Button("Deploy", id="deploy")
                     yield Button("AI assistance", id="ai")
+                    yield Button("Edit: Current", id="edit-style")
                     yield Button("Quit", id="quit", variant="error")
                 yield Static("", id="status")
         yield Footer()
@@ -205,15 +232,45 @@ class MyprisonTextualApp(App):
             self.action_toggle_draft()
         elif button_id == "build":
             self.action_build_site()
+        elif button_id == "preview":
+            self.action_preview_site()
         elif button_id == "deploy":
             self.action_deploy_site()
         elif button_id == "ai":
             self.action_ai_assistance()
+        elif button_id == "edit-style":
+            self.action_toggle_edit_style()
         elif button_id == "quit":
             self.exit()
+        elif button_id == "fmt-bold":
+            self._format_selection("**", "**", "bold text")
+        elif button_id == "fmt-italic":
+            self._format_selection("*", "*", "italic text")
+        elif button_id == "fmt-link":
+            self._format_selection("[", "](https://example.org/)", "link text")
+        elif button_id == "fmt-image":
+            self._format_selection("![", "](https://example.org/image.jpg)", "alt text")
 
     def action_refresh_posts(self) -> None:
         self.refresh_posts()
+
+    def action_toggle_edit_style(self) -> None:
+        button = self.query_one("#edit-style", Button)
+        if self.edit_style == "current":
+            self.edit_style = "vi"
+            self.vi_insert = False
+            self._vi_pending = ""
+            self._vi_command = ""
+            button.label = "Edit: Vi"
+            self._status("Vi style: normal mode. Use i/a/o to insert, :w to save, :q to quit.")
+            self.query_one("#editor", TextArea).focus()
+        else:
+            self.edit_style = "current"
+            self.vi_insert = True
+            self._vi_pending = ""
+            self._vi_command = ""
+            button.label = "Edit: Current"
+            self._status("Current edit style.")
 
     def action_new_post(self) -> None:
         title_input = self.query_one("#new-title", Input)
@@ -264,6 +321,28 @@ class MyprisonTextualApp(App):
         self._log(output or "(no output)")
         self._status("Build exit %d%s" % (rc, _tail_hint(output)))
 
+    def action_preview_site(self) -> None:
+        if not self.site.hugo_available():
+            self._status("Hugo is not on PATH.")
+            self._log("Preview skipped: hugo is not on PATH.")
+            return
+        self.action_save_post()
+        argv = self.site.serve_argv()
+        self._log("$ %s" % " ".join(argv))
+        self._status("Starting preview server; Ctrl-C returns to myprison.")
+        with self.suspend():
+            print("$ %s" % " ".join(argv))
+            print("(Ctrl-C stops the preview server)\n")
+            try:
+                subprocess.call(argv, cwd=str(self.site.root))
+            except KeyboardInterrupt:
+                pass
+            try:
+                input("\n[ press Enter to return to myprison ]")
+            except (EOFError, KeyboardInterrupt):
+                pass
+        self.refresh_posts()
+
     def action_deploy_site(self) -> None:
         self.action_save_post()
         try:
@@ -280,6 +359,20 @@ class MyprisonTextualApp(App):
         with self.suspend():
             run_ai_assistant(self.site, self.cfg)
         self.refresh_posts()
+
+    def on_key(self, event: events.Key) -> None:
+        if self.edit_style != "vi":
+            return
+        if not self.query_one("#editor", TextArea).has_focus:
+            return
+        if self.vi_insert:
+            if event.key == "escape":
+                self.vi_insert = False
+                self._status("Vi normal mode")
+                event.stop()
+            return
+        event.stop()
+        self._handle_vi_normal_key(event.key, event.character or "")
 
     def _load_post(self, post: posts.Post | None) -> None:
         self.current_post = post
@@ -312,10 +405,121 @@ class MyprisonTextualApp(App):
     def adjust_sidebar_width(self, delta: int) -> None:
         sidebar = self.query_one("#sidebar", Vertical)
         current = sidebar.outer_size.width
-        max_width = max(36, self.size.width - 60)
-        new_width = max(28, min(max_width, current + int(delta)))
+        max_width = max(56, self.size.width - 60)
+        new_width = max(42, min(max_width, current + int(delta)))
         sidebar.styles.width = new_width
         self._status("Sidebar width: %d" % new_width)
+
+    def _format_selection(self, prefix: str, suffix: str, placeholder: str) -> None:
+        editor = self.query_one("#editor", TextArea)
+        selected = getattr(editor, "selected_text", "") or ""
+        if selected:
+            selection = editor.selection
+            editor.replace("%s%s%s" % (prefix, selected, suffix), selection.start, selection.end)
+        else:
+            editor.insert("%s%s%s" % (prefix, placeholder, suffix))
+        editor.focus()
+
+    def _handle_vi_normal_key(self, key: str, char: str) -> None:
+        editor = self.query_one("#editor", TextArea)
+        if self._vi_command:
+            self._handle_vi_command_key(key, char)
+            return
+        if char == ":":
+            self._vi_command = ":"
+            self._status(":")
+            return
+        if char in ("h", "j", "k", "l"):
+            self._vi_move(editor, char)
+            return
+        if char == "i":
+            self.vi_insert = True
+            self._status("Vi insert mode")
+            return
+        if char == "a":
+            self._vi_move(editor, "l")
+            self.vi_insert = True
+            self._status("Vi insert mode")
+            return
+        if char == "o":
+            row, col = editor.cursor_location
+            line_len = len(_text_lines(editor)[row]) if _text_lines(editor) else 0
+            editor.insert("\n", (row, line_len))
+            self.vi_insert = True
+            self._status("Vi insert mode")
+            return
+        if char == "x":
+            row, col = editor.cursor_location
+            lines = _text_lines(editor)
+            if row < len(lines):
+                end_col = min(col + 1, len(lines[row]))
+                if end_col > col:
+                    editor.delete((row, col), (row, end_col))
+            return
+        if char == "d" and self._vi_pending == "d":
+            self._delete_current_line(editor)
+            self._vi_pending = ""
+            return
+        self._vi_pending = char if char == "d" else ""
+
+    def _handle_vi_command_key(self, key: str, char: str) -> None:
+        if key == "escape":
+            self._vi_command = ""
+            self._status("Vi normal mode")
+            return
+        if key == "backspace":
+            self._vi_command = self._vi_command[:-1] or ":"
+            self._status(self._vi_command)
+            return
+        if key == "enter":
+            command = self._vi_command[1:].strip()
+            self._vi_command = ""
+            if command == "w":
+                self.action_save_post()
+            elif command == "q":
+                self.exit()
+            elif command == "wq":
+                self.action_save_post()
+                self.exit()
+            else:
+                self._status("Unknown Vi command: %s" % command)
+            return
+        if char and char.isprintable():
+            self._vi_command += char
+            self._status(self._vi_command)
+
+    def _vi_move(self, editor: TextArea, key: str) -> None:
+        lines = _text_lines(editor)
+        if not lines:
+            return
+        row, col = editor.cursor_location
+        if key == "h":
+            col = max(0, col - 1)
+        elif key == "l":
+            col = min(len(lines[row]), col + 1)
+        elif key == "j":
+            row = min(len(lines) - 1, row + 1)
+            col = min(col, len(lines[row]))
+        elif key == "k":
+            row = max(0, row - 1)
+            col = min(col, len(lines[row]))
+        editor.move_cursor((row, col))
+
+    def _delete_current_line(self, editor: TextArea) -> None:
+        lines = _text_lines(editor)
+        if not lines:
+            return
+        row, _ = editor.cursor_location
+        if len(lines) == 1:
+            editor.replace("", (0, 0), (0, len(lines[0])))
+            editor.move_cursor((0, 0))
+            return
+        if row + 1 < len(lines):
+            editor.delete((row, 0), (row + 1, 0))
+            editor.move_cursor((min(row, len(lines) - 2), 0))
+        else:
+            editor.delete((row - 1, len(lines[row - 1])), (row, len(lines[row])))
+            editor.move_cursor((row - 1, len(lines[row - 1])))
 
 
 def _set_text(editor: TextArea, text: str) -> None:
@@ -327,6 +531,10 @@ def _set_text(editor: TextArea, text: str) -> None:
 
 def _get_text(editor: TextArea) -> str:
     return getattr(editor, "text", "")
+
+
+def _text_lines(editor: TextArea) -> list[str]:
+    return _get_text(editor).splitlines() or [""]
 
 
 def _run(argv: list[str], cwd: Path) -> tuple[int, str]:
