@@ -78,7 +78,7 @@ class MyprisonTextualApp(App):
         ("ctrl+b", "build_site", "Build"),
         ("ctrl+a", "ai_assistance", "AI"),
         ("f5", "refresh_posts", "Refresh"),
-        ("escape", "quit", "Quit"),
+        ("ctrl+q", "quit", "Quit"),
     ]
 
     def __init__(self, site_dir: Path):
