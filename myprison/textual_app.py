@@ -160,17 +160,17 @@ class MyprisonTextualApp(App):
                 with Horizontal(id="sidebar-actions"):
                     yield Button("New", id="new")
                     yield Button("Refresh", id="refresh")
+                yield Static("Console", id="console-title")
+                yield RichLog(id="console", wrap=True, highlight=False, markup=False)
+            yield ResizeHandle(id="splitter")
+            with Vertical(id="workspace"):
+                yield Static("No post selected", id="metadata")
                 yield Static("Editor tools", id="format-title")
                 with Horizontal(id="format-actions"):
                     yield Button("B", id="fmt-bold")
                     yield Button("I", id="fmt-italic")
                     yield Button("Link", id="fmt-link")
                     yield Button("Image", id="fmt-image")
-                yield Static("Console", id="console-title")
-                yield RichLog(id="console", wrap=True, highlight=False, markup=False)
-            yield ResizeHandle(id="splitter")
-            with Vertical(id="workspace"):
-                yield Static("No post selected", id="metadata")
                 yield TextArea("", id="editor")
                 with Horizontal(id="actions"):
                     yield Button("Save", id="save", variant="primary")
