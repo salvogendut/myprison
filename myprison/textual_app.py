@@ -74,6 +74,11 @@ class MyprisonTextualApp(App):
         height: 1fr;
     }
 
+    #sidebar-actions {
+        height: auto;
+        padding: 0 1;
+    }
+
     #console-title {
         height: 1;
         padding: 0 1;
@@ -87,7 +92,7 @@ class MyprisonTextualApp(App):
     }
 
     #new-title {
-        margin: 1 1 0 1;
+        margin: 0 1;
     }
 
     #format-title {
@@ -163,11 +168,11 @@ class MyprisonTextualApp(App):
         with Horizontal(id="main"):
             with Vertical(id="sidebar"):
                 yield Static("Posts", id="posts-title")
-                yield DataTable(id="post-table")
                 yield Input(placeholder="New post title", id="new-title")
                 with Horizontal(id="sidebar-actions"):
                     yield Button("New", id="new")
                     yield Button("Refresh", id="refresh")
+                yield DataTable(id="post-table")
                 yield Static("Console", id="console-title")
                 yield RichLog(id="console", wrap=True, highlight=False, markup=False)
             yield ResizeHandle(id="splitter")
