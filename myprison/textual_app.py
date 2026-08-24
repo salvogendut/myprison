@@ -179,7 +179,7 @@ class MyprisonTextualApp(App):
                     yield Button("Preview", id="preview")
                     yield Button("Deploy", id="deploy")
                     yield Button("AI assistance", id="ai")
-                    yield Button("Edit: Current", id="edit-style")
+                    yield Button("Editor: Default", id="edit-style")
                     yield Button("Quit", id="quit", variant="error")
                 yield Static("", id="status")
         yield Footer()
@@ -261,7 +261,7 @@ class MyprisonTextualApp(App):
             self.vi_insert = False
             self._vi_pending = ""
             self._vi_command = ""
-            button.label = "Edit: Vi"
+            button.label = "Editor: Vi"
             self._status("Vi style: normal mode. Use i/a/o to insert, :w to save, :q to quit.")
             self.query_one("#editor", TextArea).focus()
         else:
@@ -269,8 +269,8 @@ class MyprisonTextualApp(App):
             self.vi_insert = True
             self._vi_pending = ""
             self._vi_command = ""
-            button.label = "Edit: Current"
-            self._status("Current edit style.")
+            button.label = "Editor: Default"
+            self._status("Default editor style.")
 
     def action_new_post(self) -> None:
         title_input = self.query_one("#new-title", Input)
