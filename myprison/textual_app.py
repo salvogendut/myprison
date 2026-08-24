@@ -79,6 +79,16 @@ class MyprisonTextualApp(App):
         padding: 0 1;
     }
 
+    #new {
+        background: $success;
+        color: $text;
+    }
+
+    #refresh {
+        background: $warning;
+        color: $text;
+    }
+
     #console-title {
         height: 1;
         padding: 0 1;
