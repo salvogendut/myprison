@@ -4,8 +4,9 @@
 
 | What | Needed for | Notes |
 |------|------------|-------|
-| Python **3.9+** | everything | standard library only — no pip dependencies |
+| Python **3.9+** | everything | default curses UI is standard library only |
 | a terminal with curses | everything | any normal Linux/Unix terminal (UTF-8 recommended) |
+| [`textual`](https://textual.textualize.io/) | optional Textual UI | install with the `textual` extra |
 | [`hugo`](https://gohugo.io/installation/) | building / previewing the site | content management works without it |
 | `git` | installing themes | themes are cloned from their git URLs |
 | `rsync` + `ssh` | rsync deployment | recommended deployment method |
@@ -33,6 +34,14 @@ This installs a `myprison` command:
 
 ```bash
 myprison ~/blog
+```
+
+To install the optional Textual UI:
+
+```bash
+pip install ".[textual]"          # or: pip install --user ".[textual]"
+myprison --textual ~/blog
+myprison-textual ~/blog
 ```
 
 For an isolated install, use [pipx](https://pipx.pypa.io/):

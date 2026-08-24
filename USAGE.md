@@ -10,6 +10,18 @@ myprison ~/blog            # or: python3 -m myprison ~/blog
 General keys, everywhere: **↑/↓** (or `j`/`k`) move, **Enter** selects,
 **q** or **Esc** goes back, digits **1–9** jump to a menu entry.
 
+The optional Textual interface is available after installing the `textual`
+extra:
+
+```bash
+myprison --textual ~/blog
+myprison-textual ~/blog
+```
+
+The Textual UI provides a split posts list, metadata panel, and proper
+multi-line post editor. The curses UI remains the default and has no pip
+dependencies.
+
 ## 1. Creating a site
 
 If the directory has no Hugo site, a bootstrap menu offers to create one.

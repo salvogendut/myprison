@@ -21,11 +21,19 @@ def main(argv: list[str] | None = None) -> int:
         "site_dir", nargs="?", default=".",
         help="Hugo site directory (default: current directory)",
     )
+    parser.add_argument(
+        "--textual", action="store_true",
+        help="run the optional Textual UI instead of the stdlib curses UI",
+    )
     parser.add_argument("--version", action="version", version="myprison %s" % __version__)
     args = parser.parse_args(argv)
 
     locale.setlocale(locale.LC_ALL, "")
     start_dir = Path(args.site_dir).expanduser()
+    if args.textual:
+        from .textual_main import main as textual_main
+
+        return textual_main([str(start_dir)])
     try:
         curses.wrapper(curses_main, start_dir)
     except KeyboardInterrupt:

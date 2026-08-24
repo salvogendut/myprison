@@ -12,6 +12,10 @@ license = { text = "MIT" }
 
 [project.scripts]
 myprison = "myprison.__main__:main"
+myprison-textual = "myprison.textual_main:main"
+
+[project.optional-dependencies]
+textual = ["textual>=0.85"]
 
 [tool.setuptools]
 packages = ["myprison", "myprison.ai_providers"]

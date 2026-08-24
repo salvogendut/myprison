@@ -34,17 +34,18 @@ toolchain — just Markdown files you own, managed from a keyboard.
 
 ## Why myprison?
 
-- **Terminal-native.** Everything happens in one curses UI: create, edit,
-  and delete posts, manage themes, configure deployment, publish. Works over
-  SSH, in a tmux pane, on a Raspberry Pi.
+- **Terminal-native.** Everything happens in one terminal UI: create, edit,
+  and delete posts, manage themes, configure deployment, publish. The
+  default curses UI stays stdlib-only; an optional Textual UI adds a richer
+  editor and split-pane workflow.
 - **It's just Hugo.** The site tree, config, and post files are plain Hugo.
   Any theme from [themes.gohugo.io](https://themes.gohugo.io/) works. Stop
   using `myprison` tomorrow and your site still builds with the `hugo` CLI.
-- **Zero dependencies.** Pure Python 3 standard library. No pip packages,
-  no node_modules.
-- **Built-in editor.** A small nano-style editor for writing posts, with
-  Hugo front matter handled for you. Posts are listed chronologically,
-  newest first.
+- **Zero dependencies by default.** The curses UI is pure Python 3 standard
+  library. Install the `textual` extra when you want the richer Textual UI.
+- **Built-in editors.** The curses UI includes a small nano-style editor.
+  The optional Textual UI uses a proper multi-line `TextArea` editor with a
+  posts list and metadata panel.
 - **Publish from the same menu.** Sync the built site to your server with
   rsync over SSH (incremental, recommended) or FTP/FTPS — credentials and
   options configured in-app.
@@ -58,10 +59,10 @@ toolchain — just Markdown files you own, managed from a keyboard.
   run myprison through AI prompts instead of stepping through menus: ask it
   to list latest posts, create posts, translate posts, open your editor,
   edit metadata, build, deploy, publish, or inspect the current Hugo site.
-   AI vendors plug in through a provider registry; the built-in
-   providers are `chatgpt`, using `OPENAI_API_KEY` or first-use authentication
-   with provider-native web search enabled for finding relevant links, and
-   `opencode`, backed by the OpenCode Zen gateway using `OPENCODE_API_KEY`.
+  AI vendors plug in through a provider registry; the built-in providers are
+  `chatgpt`, using `OPENAI_API_KEY` or first-use authentication with
+  provider-native web search enabled for finding relevant links, and
+  `opencode`, backed by the OpenCode Zen gateway using `OPENCODE_API_KEY`.
 
 ## Quick start
 
@@ -73,6 +74,14 @@ python3 -m myprison ~/blog     # offers to scaffold a new Hugo site there
 
 Then, from the menus: install a theme (paste any git URL from
 themes.gohugo.io), write your first post, build, and deploy.
+
+For the optional Textual UI:
+
+```bash
+python3 -m pip install --user ".[textual]"
+myprison --textual ~/blog
+# or: myprison-textual ~/blog
+```
 
 ## Documentation
 
