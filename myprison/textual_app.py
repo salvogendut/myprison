@@ -218,10 +218,6 @@ class MyprisonTextualApp(App):
         self.cfg = ToolConfig(self.site.root)
         self.current_post: posts.Post | None = None
         self._columns_ready = False
-        self.edit_style = "default"
-        self.modal_insert = True
-        self._modal_pending = ""
-        self._modal_command = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -253,7 +249,6 @@ class MyprisonTextualApp(App):
                     yield Button("Deploy", id="deploy")
                     yield Button("Settings", id="settings")
                     yield Button("AI assistance", id="ai")
-                    yield Button("Editor: Default", id="edit-style")
                     yield Button("Quit", id="quit", variant="error")
                 yield Static("", id="status")
         yield Footer()
@@ -314,8 +309,6 @@ class MyprisonTextualApp(App):
             self.action_settings()
         elif button_id == "ai":
             self.action_ai_assistance()
-        elif button_id == "edit-style":
-            self.action_toggle_edit_style()
         elif button_id == "quit":
             self.exit()
         elif button_id == "fmt-bold":
@@ -349,24 +342,6 @@ class MyprisonTextualApp(App):
             self._status("Unknown settings action: %s" % choice)
             return
         action()
-
-    def action_toggle_edit_style(self) -> None:
-        button = self.query_one("#edit-style", Button)
-        if self.edit_style == "default":
-            self.edit_style = "modal"
-            self.modal_insert = False
-            self._modal_pending = ""
-            self._modal_command = ""
-            button.label = "Editor: Modal"
-            self._status("Modal editing: normal mode. Use i/a/o to insert, Esc for normal, :w/:q/:wq.")
-            self.query_one("#editor", TextArea).focus()
-        else:
-            self.edit_style = "default"
-            self.modal_insert = True
-            self._modal_pending = ""
-            self._modal_command = ""
-            button.label = "Editor: Default"
-            self._status("Default editor style.")
 
     def action_new_post(self) -> None:
         title_input = self.query_one("#new-title", Input)
@@ -527,20 +502,6 @@ class MyprisonTextualApp(App):
                 pass
         self.refresh_posts()
 
-    def on_key(self, event: events.Key) -> None:
-        if self.edit_style != "modal":
-            return
-        if not self.query_one("#editor", TextArea).has_focus:
-            return
-        if self.modal_insert:
-            if event.key == "escape":
-                self.modal_insert = False
-                self._status("Modal normal mode")
-                event.stop()
-            return
-        event.stop()
-        self._handle_modal_normal_key(event.key, event.character or "")
-
     def _load_post(self, post: posts.Post | None) -> None:
         self.current_post = post
         metadata = self.query_one("#metadata", Static)
@@ -587,108 +548,6 @@ class MyprisonTextualApp(App):
             editor.insert("%s%s%s" % (prefix, placeholder, suffix))
         editor.focus()
 
-    def _handle_modal_normal_key(self, key: str, char: str) -> None:
-        editor = self.query_one("#editor", TextArea)
-        if self._modal_command:
-            self._handle_modal_command_key(key, char)
-            return
-        if char == ":":
-            self._modal_command = ":"
-            self._status(":")
-            return
-        if char in ("h", "j", "k", "l"):
-            self._modal_move(editor, char)
-            return
-        if char == "i":
-            self.modal_insert = True
-            self._status("Modal insert mode")
-            return
-        if char == "a":
-            self._modal_move(editor, "l")
-            self.modal_insert = True
-            self._status("Modal insert mode")
-            return
-        if char == "o":
-            row, col = editor.cursor_location
-            line_len = len(_text_lines(editor)[row]) if _text_lines(editor) else 0
-            editor.insert("\n", (row, line_len))
-            self.modal_insert = True
-            self._status("Modal insert mode")
-            return
-        if char == "x":
-            row, col = editor.cursor_location
-            lines = _text_lines(editor)
-            if row < len(lines):
-                end_col = min(col + 1, len(lines[row]))
-                if end_col > col:
-                    editor.delete((row, col), (row, end_col))
-            return
-        if char == "d" and self._modal_pending == "d":
-            self._delete_current_line(editor)
-            self._modal_pending = ""
-            return
-        self._modal_pending = char if char == "d" else ""
-
-    def _handle_modal_command_key(self, key: str, char: str) -> None:
-        if key == "escape":
-            self._modal_command = ""
-            self._status("Modal normal mode")
-            return
-        if key == "backspace":
-            self._modal_command = self._modal_command[:-1] or ":"
-            self._status(self._modal_command)
-            return
-        if key == "enter":
-            command = self._modal_command[1:].strip()
-            self._modal_command = ""
-            if command == "w":
-                self.action_save_post()
-            elif command == "q":
-                self.exit()
-            elif command == "wq":
-                self.action_save_post()
-                self.exit()
-            else:
-                self._status("Unknown modal command: %s" % command)
-            return
-        if char and char.isprintable():
-            self._modal_command += char
-            self._status(self._modal_command)
-
-    def _modal_move(self, editor: TextArea, key: str) -> None:
-        lines = _text_lines(editor)
-        if not lines:
-            return
-        row, col = editor.cursor_location
-        if key == "h":
-            col = max(0, col - 1)
-        elif key == "l":
-            col = min(len(lines[row]), col + 1)
-        elif key == "j":
-            row = min(len(lines) - 1, row + 1)
-            col = min(col, len(lines[row]))
-        elif key == "k":
-            row = max(0, row - 1)
-            col = min(col, len(lines[row]))
-        editor.move_cursor((row, col))
-
-    def _delete_current_line(self, editor: TextArea) -> None:
-        lines = _text_lines(editor)
-        if not lines:
-            return
-        row, _ = editor.cursor_location
-        if len(lines) == 1:
-            editor.replace("", (0, 0), (0, len(lines[0])))
-            editor.move_cursor((0, 0))
-            return
-        if row + 1 < len(lines):
-            editor.delete((row, 0), (row + 1, 0))
-            editor.move_cursor((min(row, len(lines) - 2), 0))
-        else:
-            editor.delete((row - 1, len(lines[row - 1])), (row, len(lines[row])))
-            editor.move_cursor((row - 1, len(lines[row - 1])))
-
-
 def _set_text(editor: TextArea, text: str) -> None:
     if hasattr(editor, "load_text"):
         editor.load_text(text)
@@ -698,10 +557,6 @@ def _set_text(editor: TextArea, text: str) -> None:
 
 def _get_text(editor: TextArea) -> str:
     return getattr(editor, "text", "")
-
-
-def _text_lines(editor: TextArea) -> list[str]:
-    return _get_text(editor).splitlines() or [""]
 
 
 def _run(argv: list[str], cwd: Path) -> tuple[int, str]:
