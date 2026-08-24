@@ -83,6 +83,7 @@ class MyprisonTextualApp(App):
         height: 1fr;
         min-height: 6;
         border: solid $surface;
+        color: $success;
     }
 
     #new-title {
@@ -101,6 +102,13 @@ class MyprisonTextualApp(App):
 
     #format-actions Button {
         min-width: 7;
+        background: $panel-lighten-2;
+        color: $text;
+        border: tall $surface-lighten-2;
+    }
+
+    #format-actions Button:hover {
+        background: $surface-lighten-3;
     }
 
     #metadata {
