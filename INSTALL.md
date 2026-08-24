@@ -97,6 +97,24 @@ pip install --user -e .
 
 With pipx: `pipx reinstall myprison` (or `pipx install --force git+...`).
 
+## Building an RPM
+
+On Fedora or another RPM-based development system, install the build tools:
+
+```bash
+sudo dnf install git rpm-build python3-build python3-devel pyproject-rpm-macros
+```
+
+Then build local RPM artifacts:
+
+```bash
+make rpm
+```
+
+The binary RPM is written under `build/rpm/RPMS/`; the source RPM is written
+under `build/rpm/SRPMS/`. GitHub Actions also builds and uploads these
+artifacts whenever a tag matching `v*` is pushed.
+
 ## First run
 
 ```bash
