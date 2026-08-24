@@ -218,10 +218,10 @@ class MyprisonTextualApp(App):
         self.cfg = ToolConfig(self.site.root)
         self.current_post: posts.Post | None = None
         self._columns_ready = False
-        self.edit_style = "current"
-        self.vi_insert = True
-        self._vi_pending = ""
-        self._vi_command = ""
+        self.edit_style = "default"
+        self.modal_insert = True
+        self._modal_pending = ""
+        self._modal_command = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -352,19 +352,19 @@ class MyprisonTextualApp(App):
 
     def action_toggle_edit_style(self) -> None:
         button = self.query_one("#edit-style", Button)
-        if self.edit_style == "current":
-            self.edit_style = "vi"
-            self.vi_insert = False
-            self._vi_pending = ""
-            self._vi_command = ""
-            button.label = "Editor: Vi"
-            self._status("Vi style: normal mode. Use i/a/o to insert, :w to save, :q to quit.")
+        if self.edit_style == "default":
+            self.edit_style = "modal"
+            self.modal_insert = False
+            self._modal_pending = ""
+            self._modal_command = ""
+            button.label = "Editor: Modal"
+            self._status("Modal editing: normal mode. Use i/a/o to insert, Esc for normal, :w/:q/:wq.")
             self.query_one("#editor", TextArea).focus()
         else:
-            self.edit_style = "current"
-            self.vi_insert = True
-            self._vi_pending = ""
-            self._vi_command = ""
+            self.edit_style = "default"
+            self.modal_insert = True
+            self._modal_pending = ""
+            self._modal_command = ""
             button.label = "Editor: Default"
             self._status("Default editor style.")
 
@@ -528,18 +528,18 @@ class MyprisonTextualApp(App):
         self.refresh_posts()
 
     def on_key(self, event: events.Key) -> None:
-        if self.edit_style != "vi":
+        if self.edit_style != "modal":
             return
         if not self.query_one("#editor", TextArea).has_focus:
             return
-        if self.vi_insert:
+        if self.modal_insert:
             if event.key == "escape":
-                self.vi_insert = False
-                self._status("Vi normal mode")
+                self.modal_insert = False
+                self._status("Modal normal mode")
                 event.stop()
             return
         event.stop()
-        self._handle_vi_normal_key(event.key, event.character or "")
+        self._handle_modal_normal_key(event.key, event.character or "")
 
     def _load_post(self, post: posts.Post | None) -> None:
         self.current_post = post
@@ -587,33 +587,33 @@ class MyprisonTextualApp(App):
             editor.insert("%s%s%s" % (prefix, placeholder, suffix))
         editor.focus()
 
-    def _handle_vi_normal_key(self, key: str, char: str) -> None:
+    def _handle_modal_normal_key(self, key: str, char: str) -> None:
         editor = self.query_one("#editor", TextArea)
-        if self._vi_command:
-            self._handle_vi_command_key(key, char)
+        if self._modal_command:
+            self._handle_modal_command_key(key, char)
             return
         if char == ":":
-            self._vi_command = ":"
+            self._modal_command = ":"
             self._status(":")
             return
         if char in ("h", "j", "k", "l"):
-            self._vi_move(editor, char)
+            self._modal_move(editor, char)
             return
         if char == "i":
-            self.vi_insert = True
-            self._status("Vi insert mode")
+            self.modal_insert = True
+            self._status("Modal insert mode")
             return
         if char == "a":
-            self._vi_move(editor, "l")
-            self.vi_insert = True
-            self._status("Vi insert mode")
+            self._modal_move(editor, "l")
+            self.modal_insert = True
+            self._status("Modal insert mode")
             return
         if char == "o":
             row, col = editor.cursor_location
             line_len = len(_text_lines(editor)[row]) if _text_lines(editor) else 0
             editor.insert("\n", (row, line_len))
-            self.vi_insert = True
-            self._status("Vi insert mode")
+            self.modal_insert = True
+            self._status("Modal insert mode")
             return
         if char == "x":
             row, col = editor.cursor_location
@@ -623,24 +623,24 @@ class MyprisonTextualApp(App):
                 if end_col > col:
                     editor.delete((row, col), (row, end_col))
             return
-        if char == "d" and self._vi_pending == "d":
+        if char == "d" and self._modal_pending == "d":
             self._delete_current_line(editor)
-            self._vi_pending = ""
+            self._modal_pending = ""
             return
-        self._vi_pending = char if char == "d" else ""
+        self._modal_pending = char if char == "d" else ""
 
-    def _handle_vi_command_key(self, key: str, char: str) -> None:
+    def _handle_modal_command_key(self, key: str, char: str) -> None:
         if key == "escape":
-            self._vi_command = ""
-            self._status("Vi normal mode")
+            self._modal_command = ""
+            self._status("Modal normal mode")
             return
         if key == "backspace":
-            self._vi_command = self._vi_command[:-1] or ":"
-            self._status(self._vi_command)
+            self._modal_command = self._modal_command[:-1] or ":"
+            self._status(self._modal_command)
             return
         if key == "enter":
-            command = self._vi_command[1:].strip()
-            self._vi_command = ""
+            command = self._modal_command[1:].strip()
+            self._modal_command = ""
             if command == "w":
                 self.action_save_post()
             elif command == "q":
@@ -649,13 +649,13 @@ class MyprisonTextualApp(App):
                 self.action_save_post()
                 self.exit()
             else:
-                self._status("Unknown Vi command: %s" % command)
+                self._status("Unknown modal command: %s" % command)
             return
         if char and char.isprintable():
-            self._vi_command += char
-            self._status(self._vi_command)
+            self._modal_command += char
+            self._status(self._modal_command)
 
-    def _vi_move(self, editor: TextArea, key: str) -> None:
+    def _modal_move(self, editor: TextArea, key: str) -> None:
         lines = _text_lines(editor)
         if not lines:
             return

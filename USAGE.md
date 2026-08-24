@@ -22,7 +22,9 @@ The Textual UI provides a split posts list, metadata panel, proper
 multi-line post editor, Markdown insertion buttons, a console panel, and
 buttons for save, draft toggle, build, preview, deploy, AI assistance, and
 quit. The editor defaults to the normal Textual editing style; use the
-`Editor: Default` / `Editor: Vi` toggle for a small Vi-style normal/insert mode.
+`Editor: Default` / `Editor: Modal` toggle for a small vi-inspired
+normal/insert mode. Modal mode supports a compact key set (`h/j/k/l`, `i`,
+`a`, `o`, `x`, `dd`, `:w`, `:q`, `:wq`); it is not a full Vim implementation.
 The curses UI remains the default and has no pip dependencies.
 
 ## 1. Creating a site
